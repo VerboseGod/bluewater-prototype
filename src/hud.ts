@@ -1,5 +1,9 @@
 import { BUOY, CLEAT, SOLIDS } from './dock/layout';
 import type { DockReport } from './dock/score';
+import { drawHarbourChart } from './harbour/chart';
+import { ASSUMPTIONS, BATHY_CREDIT, OSM_CREDIT } from './harbour/credits';
+import type { HarbourReport } from './harbour/session';
+import type { HarbourWorld } from './harbour/world';
 import { KT, RAD } from './sim/math';
 import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from './sim/sim';
 
@@ -45,13 +49,16 @@ export class Hud {
   private title: HTMLElement;
   private scenarioBtn: HTMLButtonElement;
   private scenarioMenu: HTMLButtonElement;
-  private scenario: 'open' | 'dock' = 'open';
+  private scenario: 'open' | 'dock' | 'harbour' = 'open';
+  private sources: HTMLElement;
+  private harbourBtn: HTMLButtonElement;
   private hintText = '';
   private hintAt = 0;
   onToggleMode: () => void = () => undefined;
   onToggleQuality: () => void = () => undefined;
   onTogglePause: () => void = () => undefined;
   onToggleDock: () => void = () => undefined;
+  onToggleHarbour: () => void = () => undefined;
 
   constructor(parent: HTMLElement) {
     parent.innerHTML = `
@@ -77,6 +84,8 @@ export class Hud {
             <button class="ghost" id="quality" type="button">Low</button>
             <button class="ghost" id="pause" type="button">Debrief</button>
             <button class="ghost" id="scenario" type="button">Docking practice</button>
+            <button class="ghost" id="harbour" type="button">Herzliya</button>
+            <button class="ghost" id="sources-btn" type="button">Sources</button>
             <div class="badge" id="link">Keyboard</div>
             <div class="muted" id="fps">-- fps</div>
           </div>
@@ -112,6 +121,18 @@ export class Hud {
           </div>
         </div>
       </div>
+      <div class="debrief hidden" id="sources">
+        <div class="card sources-card">
+          <div>
+            <h2>Sources</h2>
+            <p class="note">${OSM_CREDIT}</p>
+            <p class="note">${BATHY_CREDIT}</p>
+            <p class="note">Assumptions, not charted data:</p>
+            <ul class="note">${ASSUMPTIONS.map((line) => `<li>${line}</li>`).join('')}</ul>
+            <button class="ghost" id="sources-close" type="button">Close</button>
+          </div>
+        </div>
+      </div>
     `;
     this.root = parent;
     this.speed = parent.querySelector('#speed')!;
@@ -141,11 +162,18 @@ export class Hud {
     this.title = parent.querySelector('h2')!;
     this.scenarioBtn = parent.querySelector('#scenario')!;
     this.scenarioMenu = parent.querySelector('#scenario-menu')!;
+    this.harbourBtn = parent.querySelector('#harbour')!;
+    this.sources = parent.querySelector('#sources')!;
+    const sourcesBtn = parent.querySelector<HTMLButtonElement>('#sources-btn')!;
+    const sourcesClose = parent.querySelector<HTMLButtonElement>('#sources-close')!;
     this.modeBtn.addEventListener('click', () => this.onToggleMode());
     this.qualityBtn.addEventListener('click', () => this.onToggleQuality());
     this.pauseBtn.addEventListener('click', () => this.onTogglePause());
     this.scenarioBtn.addEventListener('click', () => this.onToggleDock());
     this.scenarioMenu.addEventListener('click', () => this.onToggleDock());
+    this.harbourBtn.addEventListener('click', () => this.onToggleHarbour());
+    sourcesBtn.addEventListener('click', () => this.sources.classList.remove('hidden'));
+    sourcesClose.addEventListener('click', () => this.sources.classList.add('hidden'));
   }
 
   get canvas(): HTMLCanvasElement {
@@ -157,21 +185,24 @@ export class Hud {
     this.pauseBtn.textContent = paused ? 'Resume' : 'Debrief';
   }
 
-  setScenario(mode: 'open' | 'dock'): void {
+  setScenario(mode: 'open' | 'dock' | 'harbour'): void {
     this.scenario = mode;
-    const label = mode === 'dock' ? 'Open water' : 'Docking practice';
+    const label = mode === 'open' ? 'Docking practice' : 'Open water';
     this.scenarioBtn.textContent = label;
     this.scenarioMenu.textContent = label;
+    this.harbourBtn.textContent = mode === 'harbour' ? 'Open water' : 'Herzliya';
     this.legend.textContent =
       mode === 'dock'
         ? 'A out/hike · B in/across · Y assisted · R3/F anchor · RB/M line · D-pad up/U scope out · D-pad down/N scope in · LB/Z wind · L3/T tide · View reset · Menu debrief · X low/high'
-        : 'Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · H docking · V cinematic · View reset · Menu debrief · X low/high';
+        : mode === 'harbour'
+          ? 'Herzliya marina · stick steers · triggers sheet · Q paddles off the berth · Z wind · RB/M mooring line · View reset · Menu chart · X low/high · Sources for the chart data'
+          : 'Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · H docking · V cinematic · View reset · Menu debrief · X low/high';
     if (mode === 'open') this.strip.classList.add('hidden');
-    this.link.textContent = mode === 'dock' ? 'Dock' : 'Steady';
+    this.link.textContent = mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Dock' : 'Steady';
   }
 
   setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info'): void {
-    if (this.scenario !== 'dock' || !text) {
+    if ((this.scenario !== 'dock' && this.scenario !== 'harbour') || !text) {
       this.strip.classList.add('hidden');
       return;
     }
@@ -390,6 +421,27 @@ export class Hud {
       .join('');
     const note = this.root.querySelector('#debriefnote')!;
     note.textContent = report.tip;
+  }
+
+  drawHarbourDebrief(sim: Simulation, report: HarbourReport, world: HarbourWorld): void {
+    this.title.textContent = 'Herzliya';
+    const ctx = this.trackCanvas.getContext('2d');
+    if (!ctx) return;
+    drawHarbourChart(ctx, this.trackCanvas.width, this.trackCanvas.height, world, sim.track, { x: sim.x, y: sim.y }, report);
+    const dock = report.dock;
+    const rows = [
+      [`${report.timeSec.toFixed(0)} s`, 'Time'],
+      [report.phase, 'Phase'],
+      [`${report.groundings}`, 'Groundings'],
+      [`${report.shadowMoments}`, 'Wind-shadow moments'],
+      [`${report.shadowSeconds.toFixed(0)} s`, 'Time in the lee'],
+      [dock.approachKn == null ? '—' : `${dock.approachKn.toFixed(1)} kn`, 'Docking approach'],
+      [dock.moored ? 'made fast' : 'not fast', 'Visitor pontoon'],
+      [dock.impactClass === 'none' ? 'none' : `${dock.impactMs.toFixed(2)} m/s`, 'Dock impact'],
+    ];
+    this.stats.innerHTML = rows.map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join('');
+    const note = this.root.querySelector('#debriefnote')!;
+    note.textContent = `${dock.tip} The chart is coastline and depth from the checked-in extracts, not a navigational chart. The yellow dots are practice marks.`;
   }
 }
 

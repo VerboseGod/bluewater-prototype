@@ -179,6 +179,41 @@ function gradientSky(sunDir: Vector3): Mesh {
   return mesh;
 }
 
+/** Day is the open-water sun. Golden is a low western sun for the harbour. */
+export function applyTimeOfDay(rig: SkyRig, mode: 'day' | 'golden'): void {
+  const elev = (mode === 'golden' ? 8 : 32) * (Math.PI / 180);
+  const az = mode === 'golden' ? Math.PI - 0.35 : 0.62;
+  rig.sunDir
+    .set(Math.cos(elev) * Math.cos(az), Math.sin(elev), -Math.cos(elev) * Math.sin(az))
+    .normalize();
+  rig.sky.material.uniforms.sunPosition.value.copy(rig.sunDir);
+  const cheapSun = (rig.cheap.material as ShaderMaterial).uniforms.uSun.value as Vector3;
+  cheapSun.copy(rig.sunDir);
+  const u = rig.sky.material.uniforms;
+  if (mode === 'golden') {
+    u.turbidity.value = 8;
+    u.rayleigh.value = 3.1;
+    u.mieCoefficient.value = 0.018;
+    rig.horizon.set('#e7a56a');
+    rig.sun.color.set('#ffb07a');
+    rig.sun.intensity = 2.4;
+    rig.hemi.color.set('#ffd0a8');
+    rig.hemi.groundColor.set('#2a3330');
+    rig.hemi.intensity = 0.38;
+  } else {
+    u.turbidity.value = 2.1;
+    u.rayleigh.value = 2.4;
+    u.mieCoefficient.value = 0.0045;
+    rig.horizon.set('#8eafc8');
+    rig.sun.color.set('#fff1d6');
+    rig.sun.intensity = 3.1;
+    rig.hemi.color.set('#d5e6f5');
+    rig.hemi.groundColor.set('#1a3a34');
+    rig.hemi.intensity = 0.55;
+  }
+  rig.fog.color.copy(rig.horizon);
+}
+
 export function followBoat(rig: SkyRig, x: number, z: number): void {
   rig.sun.position.set(
     x + rig.sunDir.x * 36,

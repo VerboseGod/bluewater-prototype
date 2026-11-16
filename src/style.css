@@ -253,6 +253,9 @@ button.ghost.on { color: var(--amber); border-color: rgba(255, 193, 77, 0.7); }
 }
 .stat span { font-size: 14px; letter-spacing: 0.04em; color: rgba(243, 247, 248, 0.68); }
 .note { color: rgba(243, 247, 248, 0.78); font-size: 16px; line-height: 1.45; }
+.sources-card { grid-template-columns: 1fr; }
+.sources-card ul { margin: 8px 0 16px; padding-left: 18px; }
+.sources-card li { margin: 6px 0; }
 
 @media (max-width: 800px) {
   .debrief .card { grid-template-columns: 1fr; }

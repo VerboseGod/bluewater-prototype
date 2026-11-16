@@ -28,7 +28,14 @@ export interface WaterSample {
   orbZ: number;
 }
 
-export function sampleWater(x: number, z: number, time: number, enabled = true, count = WAVES.length): WaterSample {
+export function sampleWater(
+  x: number,
+  z: number,
+  time: number,
+  enabled = true,
+  count = WAVES.length,
+  scale = 1,
+): WaterSample {
   if (!enabled) {
     return { height: 0, normalX: 0, normalY: 1, normalZ: 0, orbX: 0, orbZ: 0 };
   }
@@ -38,6 +45,7 @@ export function sampleWater(x: number, z: number, time: number, enabled = true, 
   let orbX = 0;
   let orbZ = 0;
   const n = Math.min(count, WAVES.length);
+  const ampScale = scale;
   for (let i = 0; i < n; i++) {
     const w = WAVES[i];
     const k = (Math.PI * 2) / w.wavelength;
@@ -46,11 +54,12 @@ export function sampleWater(x: number, z: number, time: number, enabled = true, 
     const s = Math.sin(phase);
     const c = Math.cos(phase);
     const q = clamp(w.steepness, 0, 1);
-    height += w.amplitude * s;
-    slopeX += w.amplitude * c * k * w.dirX;
-    slopeZ += w.amplitude * c * k * w.dirZ;
-    orbX += q * w.amplitude * w.dirX * s * omega;
-    orbZ += q * w.amplitude * w.dirZ * s * omega;
+    const amp = w.amplitude * ampScale;
+    height += amp * s;
+    slopeX += amp * c * k * w.dirX;
+    slopeZ += amp * c * k * w.dirZ;
+    orbX += q * amp * w.dirX * s * omega;
+    orbZ += q * amp * w.dirZ * s * omega;
   }
   const nx = -slopeX;
   const ny = 1;
