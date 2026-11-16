@@ -94,6 +94,14 @@ Come alongside with the sail luffing. The mooring line reaches about a metre and
 
 The debrief for an attempt shows approach speed, impact speed, distance and angle when you stopped, time, anchor scope, and whether it held, plus one plain-language tip. In this scenario D-pad up and down pay the rode. D-pad left and right, and keys 1 / 2 / 3, still move the camera. V is still the cinematic camera.
 
+## Learn to sail
+
+`?scenario=learn` opens six lessons for someone who has never held a tiller. It is also in the Places menu, as Learn to sail. The lessons are where the wind comes from, a beam reach, the points of sail, a tack, a safe gybe, and coming back to the pontoon head-to-wind. Each one is a short line of coaching, with Xbox glyphs, and the sim decides when it is done. The debrief gives one to three stars. Progress is kept in the browser.
+
+On the lesson list, the D-pad moves and A starts. B goes back. During a lesson, Menu returns to the list and View restarts it. The wind is a steady 11 kn, the same dinghy as open water. A tack is graded by the speed kept and by the tack-quality term the boat already uses. Coming back uses the docking score.
+
+`?scenario=learn&pilot=1` sails the first two lessons on its own. `&lesson=4&pilot=tack` sails the tack.
+
 ## Herzliya harbour
 
 `?scenario=harbour` places the same dinghy in Herzliya Marina, on the Israeli coast. The origin is 32.163°N, 34.794°E. Physics x is east, y is north, in metres, so true north is +y. Open it from the Herzliya button, or with that query. `&demo=1` sails a south-westerly circuit: off a berth, out through the entrance, around two practice marks, and back to the visitor pontoon. `&shot=overview` holds a golden-hour view of the entrance. Z cycles the wind. The default for a player is the westerly sea breeze; WNW and NW are the other afternoon directions. Q is a short paddle for leaving the berth. The mooring line, the anchor, and the docking score are the step-2 systems, aimed at the visitor pontoon.

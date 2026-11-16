@@ -19,9 +19,14 @@ import type { DockReport } from './dock/score';
 import { HarbourSession, type HarbourReport } from './harbour/session';
 import { HerzliyaView } from './render/herzliya';
 import { Hud, hintFor } from './hud';
+import { LearnDirector } from './learn/director';
+import { launchFor, sampleOf, type DockView, type LessonLaunch } from './learn/model';
+import { LearnOverlay } from './learn/overlay';
+import { pilotStick } from './learn/pilot';
 import { attachKeyboard, readInput, rumble, setPadLayout, type InputState } from './input';
 import { HarbourView } from './render/harbour';
 import { chaseAim } from './render/chase';
+import { TrackRibbon } from './render/ribbon';
 import { hullFloat } from './render/float';
 import { KT } from './sim/math';
 import { Simulation, type Controls, type SimSnapshot } from './sim/sim';
@@ -93,13 +98,23 @@ export class Game {
   private benchTime = 0;
   private benchDone = false;
   private stick: Controls | null = null;
+  private learn: LearnDirector | null = null;
+  private overlay: LearnOverlay;
+  private ribbon: TrackRibbon;
+  private pilotMode: 'off' | 'basics' | 'tack' = 'off';
+  private lessonQuery = 0;
+  private visual = 0;
 
   constructor(root: HTMLElement) {
     const scenario = params.get('scenario');
     const dockQuery = scenario === 'dock';
     const harbourQuery = scenario === 'harbour';
+    const learnQuery = scenario === 'learn';
     this.quality = params.get('quality') === 'high' || params.has('demo') ? 'high' : 'low';
-    this.demo = params.has('demo') && !dockQuery && !harbourQuery ? new DemoDirector() : null;
+    this.demo = params.has('demo') && !dockQuery && !harbourQuery && !learnQuery ? new DemoDirector() : null;
+    const pilot = params.get('pilot');
+    this.pilotMode = pilot === 'tack' ? 'tack' : pilot === '1' || pilot === 'basics' ? 'basics' : 'off';
+    this.lessonQuery = Number(params.get('lesson')) || 0;
     this.pace = harbourQuery ? Math.max(1, Math.min(16, Number(params.get('pace')) || 1)) : 1;
     const shot = params.get('shot');
     this.overview = harbourQuery && (shot === 'overview' || shot === 'entrance' || shot === 'berth');
@@ -133,7 +148,16 @@ export class Game {
     this.spray = new BowSpray(this.quality);
     this.boat.setContactShadow(true);
     this.coast = makeCoast();
-    this.scene.add(this.ocean.mesh, this.coast, this.marks.group, this.cues.group, this.wake.mesh, this.spray.mesh, this.boat.group);
+    this.overlay = new LearnOverlay(root);
+    this.ribbon = new TrackRibbon();
+    this.scene.add(this.ocean.mesh, this.coast, this.marks.group, this.cues.group, this.wake.mesh, this.spray.mesh, this.boat.group, this.ribbon.mesh);
+    this.overlay.onConfirm = () => this.confirmLearn();
+    this.overlay.onBack = () => this.backLearn();
+    this.overlay.onPick = (index) => {
+      if (!this.learn) return;
+      this.learn.cursor = index;
+      this.confirmLearn();
+    };
 
     this.hud.onToggleMode = () => {
       this.sim.assisted = !this.sim.assisted;
@@ -154,6 +178,7 @@ export class Game {
     const query = new URLSearchParams(window.location.search);
     if (query.get('scenario') === 'dock') this.enterDock(query.get('demo') === '1');
     if (harbourQuery) this.enterHarbour(params.has('demo') && !this.reel);
+    if (learnQuery) this.enterLearn(true);
   }
 
   start(): void {
@@ -186,9 +211,32 @@ export class Game {
     this.sim.wind.steady = steady;
   }
 
-  scenario(): 'open' | 'dock' | 'harbour' {
+  scenario(): 'open' | 'dock' | 'harbour' | 'learn' {
+    if (this.learn) return 'learn';
     if (this.marina) return 'harbour';
     return this.dock ? 'dock' : 'open';
+  }
+
+  learnState(): {
+    phase: string;
+    lesson: number | null;
+    step: string;
+    coach: string;
+    completed: number[];
+    stars: number | null;
+    passed: boolean;
+  } | null {
+    if (!this.learn) return null;
+    const view = this.learn.view();
+    return {
+      phase: view.phase,
+      lesson: view.lesson,
+      step: view.stepId,
+      coach: view.say,
+      completed: this.learn.completed(),
+      stars: view.passed ? view.stars : null,
+      passed: view.passed,
+    };
   }
 
   dockReport(): DockReport | null {
@@ -204,10 +252,11 @@ export class Game {
     const real = Math.min(this.reel ? 0.3 : this.pace > 1 ? 0.12 : 0.05, raw);
     if (this.reel && !this.paused) this.reelT += Math.min(0.3, raw);
     const dt = this.capture ? 1 / 30 : real;
+    this.visual += dt;
     this.last = t;
     if (!this.capture) this.fps += (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
     let input = readInput();
-    if (this.demo && !this.dock && !this.paused) {
+    if (this.demo && !this.dock && !this.marina && !this.learn && !this.paused) {
       const s = this.sim.snapshot;
       const cmd = this.demo.step(dt, s.heading, s.sheet, s.vFwd);
       input = {
@@ -223,7 +272,15 @@ export class Game {
     }
     this.applyInput(input, dt);
     this.draw(dt);
-    const hint = this.marina ? this.marina.hint() : this.dock ? this.dock.hint() : this.demo ? { text: '', urgent: false } : hintFor(this.sim);
+    const hint = this.learn
+      ? { text: '', urgent: false }
+      : this.marina
+        ? this.marina.hint()
+        : this.dock
+          ? this.dock.hint()
+          : this.demo
+            ? { text: '', urgent: false }
+            : hintFor(this.sim);
     if (this.marina) {
       const strip = this.marina.strip();
       this.hud.setStrip(strip.text, strip.kind);
@@ -232,6 +289,15 @@ export class Game {
       this.hud.setStrip(strip.text, strip.kind);
     } else this.hud.setStrip(null);
     this.hud.render(this.sim, hint.text, hint.urgent, this.quality);
+    if (this.learn) {
+      this.overlay.show(this.learn.view(sampleOf(this.sim.snapshot, this.sim.lastTackQuality)));
+      this.ribbon.update(this.learn.ribbon);
+      this.hud.root.classList.toggle('picking-lesson', this.learn.phase === 'menu');
+    } else {
+      this.overlay.hide();
+      this.ribbon.clear();
+      this.hud.root.classList.remove('picking-lesson');
+    }
     this.hud.setFps(this.capture ? 0 : this.fps);
     if (this.paused) this.showDebrief();
     this.noteBench(raw);
@@ -251,6 +317,10 @@ export class Game {
   }
 
   private applyInput(input: InputState, dt: number): void {
+    if (this.learn) {
+      this.applyLearn(input, dt);
+      return;
+    }
     if (input.pausePressed) {
       this.paused = !this.paused;
       this.hud.setPaused(this.paused);
@@ -325,10 +395,11 @@ export class Game {
     const shake = s.shake;
     this.boat.group.position.y += Math.sin(time * 40) * shake * 0.08;
 
-    this.ocean.update(time, s.x, s.y, s.heading, s.speed, s.windFrom, s.tws, this.sim.gusts(), dt, !this.paused);
+    const clock = this.learn && this.learn.phase !== 'sail' ? this.visual : time;
+    this.ocean.update(clock, s.x, s.y, s.heading, s.speed, s.windFrom, s.tws, this.sim.gusts(), dt, !this.paused);
     const windToX = -Math.cos(s.windFrom) * s.tws;
     const windToZ = -Math.sin(s.windFrom) * s.tws;
-    this.cues.update(s.x, s.y, s.windFrom, windToX, windToZ, this.sim.gusts(), this.sim.assisted, time);
+    this.cues.update(s.x, s.y, s.windFrom, windToX, windToZ, this.sim.gusts(), this.sim.assisted, clock, s.heading);
     if (s.speed > 0.4 && !this.paused) {
       const sx = s.x - Math.cos(s.heading) * 1.9;
       const sz = s.y - Math.sin(s.heading) * 1.9;
@@ -340,7 +411,7 @@ export class Game {
     const impact = Math.min(2, Math.abs(bowSlope.slopeX) + Math.abs(bowSlope.slopeZ) + s.speed * 0.12);
     this.spray.update(dt, s.x, s.y, s.heading, s.speed, pose.y, this.camera.position, this.paused, impact);
     this.marks.update(time, (x, z) => this.ocean.heightAt(x, z, time));
-    this.sky.sky.material.uniforms.time.value = time;
+    this.sky.sky.material.uniforms.time.value = clock;
     followBoat(this.sky, s.x, s.y, this.marina ? 130 : 36);
     this.placeCamera(s, pose.y, dt);
     this.renderer.render(this.scene, this.camera);
@@ -467,7 +538,16 @@ export class Game {
     this.hud.setPaused(false);
   }
 
+  private closeLearn(): void {
+    this.learn = null;
+    this.pilotMode = 'off';
+    this.cues.setTeaching(false);
+    this.ribbon.clear();
+    this.overlay.hide();
+  }
+
   private enterDock(demo: boolean): void {
+    this.closeLearn();
     this.dock = new DockSession({ demo });
     this.sim = this.dock.sim;
     if (!this.harbour) {
@@ -483,6 +563,7 @@ export class Game {
   }
 
   private enterHarbour(demo: boolean): void {
+    this.closeLearn();
     if (this.dock) {
       this.dock = null;
       if (this.harbour) this.harbour.group.visible = false;
@@ -515,6 +596,7 @@ export class Game {
   }
 
   private enterOpen(): void {
+    this.closeLearn();
     this.dock = null;
     this.marina = null;
     this.pace = 1;
@@ -539,9 +621,147 @@ export class Game {
     this.hud.setTime(mode);
   }
 
-  private goPlace(place: 'open' | 'dock' | 'harbour'): void {
+  private applyLearn(input: InputState, dt: number): void {
+    const learn = this.learn;
+    if (!learn) return;
+    if (input.qualityPressed) this.cycleQuality();
+    if (input.assistPressed) this.sim.assisted = !this.sim.assisted;
+    if (learn.phase !== 'sail') {
+      setPadLayout('menu');
+      if (input.menuUp) learn.move(-1);
+      if (input.menuDown) learn.move(1);
+      if (input.menuConfirm) this.confirmLearn();
+      if (input.menuBack || input.pausePressed) this.backLearn();
+      return;
+    }
+    setPadLayout(this.dock ? 'dock' : 'sail');
+    if (input.pausePressed) {
+      learn.back();
+      setPadLayout('menu');
+      return;
+    }
+    if (input.resetPressed) {
+      this.launchLesson(learn.restart());
+      return;
+    }
+    if (input.camera) this.camMode = input.camera;
+    if (input.cycleCamera) this.camMode = MODES[(MODES.indexOf(this.camMode) + 1) % MODES.length];
+    this.orbit += input.orbitX * dt * 1.6;
+    this.pitch = Math.max(-0.15, Math.min(1.05, this.pitch - input.orbitY * dt));
+    this.orbit *= Math.exp(-dt * 0.45);
+
+    this.acc += dt * this.pace;
+    let stepped = 0;
+    const marksBefore = this.sim.marks.length;
+    let guard = 0;
+    while (this.acc >= this.step && guard < 5) {
+      const preview = sampleOf(this.sim.snapshot, this.sim.lastTackQuality);
+      const lesson = learn.lesson;
+      const pilot =
+        this.pilotMode !== 'off' && !this.stick && lesson
+          ? pilotStick(lesson.id, learn.stepId, preview, learn.memory.helmSide)
+          : null;
+      const stick = this.stick ?? pilot;
+      const frameInput = stick ? { ...input, ...stick } : input;
+      if (this.dock) this.dock.step(this.step, frameInput);
+      else {
+        this.sim.step(this.step, {
+          rudder: frameInput.rudder,
+          sheetIn: frameInput.sheetIn,
+          sheetOut: frameInput.sheetOut,
+          hike: frameInput.hike,
+          moveIn: frameInput.moveIn,
+        });
+      }
+      const buzz = this.sim.consumeRumble();
+      if (buzz) rumble(buzz.strong, buzz.weak, buzz.ms);
+      this.acc -= this.step;
+      stepped += this.step;
+      guard++;
+    }
+    if (this.acc > this.step) this.acc = 0;
+    if (stepped <= 0) return;
+    const added = this.sim.marks.length > marksBefore ? this.sim.marks[this.sim.marks.length - 1].type : null;
+    const phase = learn.tick(stepped, sampleOf(this.sim.snapshot, this.sim.lastTackQuality), this.dockGrade(), added);
+    if (phase === 'debrief') this.onLearnDebrief();
+  }
+
+  private confirmLearn(): void {
+    if (!this.learn) return;
+    const launch = this.learn.confirm();
+    if (launch) this.launchLesson(launch);
+  }
+
+  private backLearn(): void {
+    if (!this.learn) return;
+    if (this.learn.back() === 'close') this.enterOpen();
+    else setPadLayout('menu');
+  }
+
+  private onLearnDebrief(): void {
+    setPadLayout('menu');
+    if (this.pilotMode === 'basics' && this.learn && this.learn.lessonNumber < 2) {
+      this.launchLesson(this.learn.begin(this.learn.lessonNumber));
+    }
+  }
+
+  private dockGrade(): DockView | null {
+    if (!this.dock) return null;
+    const report = this.dock.report();
+    return {
+      moored: report.moored,
+      approachKn: report.approachKn,
+      impactClass: report.impactClass,
+      distAtStop: report.distAtStop,
+      stopped: report.distAtStop != null,
+    };
+  }
+
+  private launchLesson(launch: LessonLaunch): void {
+    const director = this.learn;
+    const pilot = this.pilotMode;
+    if (!director) return;
+    if (launch.world === 'dock') this.enterDock(false);
+    else {
+      this.enterOpen();
+      this.sim = openFrom(launch);
+    }
+    this.learn = director;
+    this.pilotMode = pilot;
+    this.paused = false;
+    this.hud.setPaused(false);
+    this.hud.setScenario('learn');
+    this.cues.setTeaching(true);
+    this.ribbon.clear();
+    setPadLayout(launch.world === 'dock' ? 'dock' : 'sail');
+  }
+
+  private parkMenuBoat(): void {
+    this.sim = openFrom(launchFor(2));
+    const still = { rudder: 0, sheetIn: 0, sheetOut: 0, hike: 0, moveIn: 0 };
+    for (let i = 0; i < 90; i++) this.sim.step(1 / 60, still);
+  }
+
+  private enterLearn(fromQuery: boolean): void {
+    const pilot = fromQuery ? this.pilotMode : 'off';
+    const lessonN = fromQuery ? this.lessonQuery : 0;
+    this.enterOpen();
+    this.learn = new LearnDirector();
+    this.pilotMode = pilot;
+    this.hud.setScenario('learn');
+    this.cues.setTeaching(true);
+    setPadLayout('menu');
+    this.parkMenuBoat();
+    if (!fromQuery || !this.learn) return;
+    if (this.pilotMode === 'tack') this.launchLesson(this.learn.begin(3));
+    else if (lessonN >= 1 && lessonN <= 6) this.launchLesson(this.learn.begin(lessonN - 1));
+    else if (this.pilotMode === 'basics') this.launchLesson(this.learn.begin(0));
+  }
+
+  private goPlace(place: 'open' | 'dock' | 'harbour' | 'learn'): void {
     if (place === 'open') this.enterOpen();
     else if (place === 'dock') this.enterDock(false);
+    else if (place === 'learn') this.enterLearn(false);
     else this.enterHarbour(false);
     this.paused = false;
     this.hud.setPaused(false);
@@ -595,6 +815,24 @@ function reelStick(input: InputState, heading: number, target: number, reelT: nu
     moveIn: 0,
     paddle: sail && speed < 0.7,
   };
+}
+
+function openFrom(launch: LessonLaunch): Simulation {
+  const sim = new Simulation({
+    windSpeed: launch.windSpeed,
+    windFrom: launch.windFrom,
+    steady: true,
+    waves: false,
+    assisted: true,
+    heading: launch.heading,
+    x: launch.x,
+    y: launch.y,
+    vx: launch.vx,
+    vy: launch.vy,
+    sheet: launch.sheet,
+  });
+  sim.boom = launch.boom;
+  return sim;
 }
 
 export function berthFrame(sim: { x: number; y: number }): { px: number; py: number; pz: number; lx: number; ly: number; lz: number } {

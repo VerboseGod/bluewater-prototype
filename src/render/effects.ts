@@ -3,6 +3,7 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
+  ConeGeometry,
   DoubleSide,
   Group,
   InstancedMesh,
@@ -25,7 +26,9 @@ export class WindCues {
   private streamers: InstancedMesh;
   private origins: { x: number; z: number }[] = [];
   private wedge: Line;
+  private arrow: Group;
   private count: number;
+  private teaching = false;
 
   constructor(quality: 'low' | 'high') {
     const max = 36;
@@ -55,6 +58,17 @@ export class WindCues {
     this.group.add(this.streamers);
     this.wedge = noGoLine();
     this.group.add(this.wedge);
+    this.arrow = windArrow();
+    this.group.add(this.arrow);
+  }
+
+  /** Wind streaks, the no-go arc, and an arrow toward where the wind comes from. */
+  setTeaching(on: boolean): void {
+    this.teaching = on;
+    this.streamers.visible = on;
+    this.arrow.visible = on;
+    const mat = this.streamers.material as MeshBasicMaterial;
+    mat.opacity = on ? 0.72 : 0.22;
   }
 
   setQuality(quality: 'low' | 'high'): void {
@@ -70,6 +84,7 @@ export class WindCues {
     gusts: Gust[],
     assisted: boolean,
     time: number,
+    heading = 0,
   ): void {
     const speed = Math.hypot(windToX, windToZ) || 1;
     const dir = Math.atan2(windToZ, windToX);
@@ -91,17 +106,47 @@ export class WindCues {
       }
       dummy.position.set(x, 0.35, z);
       dummy.rotation.set(-0.15, -dir, 0);
-      dummy.scale.set(0.55 + gust * 0.35, 1, 1);
+      dummy.scale.set((this.teaching ? 1.8 : 0.55) + gust * 0.35, 1, 1);
       dummy.updateMatrix();
       this.streamers.setMatrixAt(i, dummy.matrix);
     }
     this.streamers.instanceMatrix.needsUpdate = true;
     this.streamers.count = this.count;
 
-    this.wedge.visible = assisted;
+    this.wedge.visible = assisted || this.teaching;
     this.wedge.position.set(boatX, 0.4, boatZ);
     this.wedge.rotation.y = -windFrom;
+    this.arrow.visible = this.teaching;
+    const ahead = 9;
+    const hx = Math.cos(heading);
+    const hz = Math.sin(heading);
+    const wx = Math.cos(windFrom);
+    const wz = Math.sin(windFrom);
+    this.arrow.position.set(boatX + hx * ahead + wx * 2.5, 1.8, boatZ + hz * ahead + wz * 2.5);
+    this.arrow.rotation.y = -windFrom;
   }
+}
+
+function windArrow(): Group {
+  const group = new Group();
+  const mat = new MeshBasicMaterial({
+    color: '#ffe08a',
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+    side: DoubleSide,
+  });
+  const shaftV = new Mesh(new PlaneGeometry(8, 0.55), mat);
+  shaftV.position.x = 4;
+  const shaftH = new Mesh(new PlaneGeometry(8, 0.55), mat);
+  shaftH.rotation.x = -Math.PI / 2;
+  shaftH.position.x = 4;
+  const head = new Mesh(new ConeGeometry(1.15, 2.4, 4), mat);
+  head.rotation.z = -Math.PI / 2;
+  head.position.x = 9.2;
+  group.add(shaftV, shaftH, head);
+  group.visible = false;
+  return group;
 }
 
 function noGoLine(): Line {
