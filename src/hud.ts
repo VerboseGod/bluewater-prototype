@@ -1,3 +1,5 @@
+import { BUOY, CLEAT, SOLIDS } from './dock/layout';
+import type { DockReport } from './dock/score';
 import { KT, RAD } from './sim/math';
 import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from './sim/sim';
 
@@ -25,9 +27,16 @@ export class Hud {
   private debrief: HTMLElement;
   private trackCanvas: HTMLCanvasElement;
   private stats: HTMLElement;
+  private legend: HTMLElement;
+  private strip: HTMLElement;
+  private title: HTMLElement;
+  private scenarioBtn: HTMLButtonElement;
+  private scenarioMenu: HTMLButtonElement;
+  private scenario: 'open' | 'dock' = 'open';
   onToggleMode: () => void = () => undefined;
   onToggleQuality: () => void = () => undefined;
   onTogglePause: () => void = () => undefined;
+  onToggleDock: () => void = () => undefined;
 
   constructor(parent: HTMLElement) {
     parent.innerHTML = `
@@ -52,11 +61,12 @@ export class Hud {
             <button class="ghost" id="mode" type="button">Assisted</button>
             <button class="ghost" id="quality" type="button">Low</button>
             <button class="ghost" id="pause" type="button">Debrief</button>
+            <button class="ghost" id="scenario" type="button">Docking practice</button>
             <div class="badge" id="link">Keyboard</div>
             <div class="muted" id="fps">-- fps</div>
           </div>
         </div>
-        <div class="mid"><div class="hint" id="hint"></div></div>
+        <div class="mid"><div class="stack"><div class="dockstrip hidden" id="dockstrip"></div><div class="hint" id="hint"></div></div></div>
         <div class="bottom">
           <div class="panel sheet">
             <div>Sheeted in <span class="muted">right trigger in · left trigger out</span></div>
@@ -72,7 +82,7 @@ export class Hud {
             <div class="state-word" id="sailorword">Windward rail</div>
           </div>
         </div>
-        <div class="legend">Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · V cinematic · View reset · Menu debrief · X low/high</div>
+        <div class="legend" id="legend">Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · H docking · V cinematic · View reset · Menu debrief · X low/high</div>
       </div>
       <div class="debrief hidden" id="debrief">
         <div class="card">
@@ -83,6 +93,7 @@ export class Hud {
           <div>
             <div class="stats" id="stats"></div>
             <p class="note" id="debriefnote"></p>
+            <button class="ghost" id="scenario-menu" type="button">Docking practice</button>
           </div>
         </div>
       </div>
@@ -110,9 +121,16 @@ export class Hud {
     this.debrief = parent.querySelector('#debrief')!;
     this.trackCanvas = parent.querySelector('#track')!;
     this.stats = parent.querySelector('#stats')!;
+    this.legend = parent.querySelector('#legend')!;
+    this.strip = parent.querySelector('#dockstrip')!;
+    this.title = parent.querySelector('h2')!;
+    this.scenarioBtn = parent.querySelector('#scenario')!;
+    this.scenarioMenu = parent.querySelector('#scenario-menu')!;
     this.modeBtn.addEventListener('click', () => this.onToggleMode());
     this.qualityBtn.addEventListener('click', () => this.onToggleQuality());
     this.pauseBtn.addEventListener('click', () => this.onTogglePause());
+    this.scenarioBtn.addEventListener('click', () => this.onToggleDock());
+    this.scenarioMenu.addEventListener('click', () => this.onToggleDock());
   }
 
   get canvas(): HTMLCanvasElement {
@@ -121,6 +139,30 @@ export class Hud {
 
   setPaused(paused: boolean): void {
     this.debrief.classList.toggle('hidden', !paused);
+    this.pauseBtn.textContent = paused ? 'Resume' : 'Debrief';
+  }
+
+  setScenario(mode: 'open' | 'dock'): void {
+    this.scenario = mode;
+    const label = mode === 'dock' ? 'Open water' : 'Docking practice';
+    this.scenarioBtn.textContent = label;
+    this.scenarioMenu.textContent = label;
+    this.legend.textContent =
+      mode === 'dock'
+        ? 'A out/hike · B in/across · Y assisted · R3/F anchor · RB/M line · D-pad up/U scope out · D-pad down/N scope in · LB/Z wind · L3/T tide · View reset · Menu debrief · X low/high'
+        : 'Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · H docking · V cinematic · View reset · Menu debrief · X low/high';
+    if (mode === 'open') this.strip.classList.add('hidden');
+    this.link.textContent = mode === 'dock' ? 'Dock' : 'Steady';
+  }
+
+  setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info'): void {
+    if (this.scenario !== 'dock' || !text) {
+      this.strip.classList.add('hidden');
+      return;
+    }
+    this.strip.classList.remove('hidden', 'good', 'bad');
+    if (kind !== 'info') this.strip.classList.add(kind);
+    this.strip.textContent = text;
   }
 
   setFps(fps: number): void {
@@ -141,7 +183,7 @@ export class Hud {
     this.modeBtn.textContent = sim.assisted ? 'Assisted' : 'Full manual';
     this.modeBtn.classList.toggle('on', sim.assisted);
     this.qualityBtn.textContent = quality === 'high' ? 'High' : 'Low';
-    this.link.textContent = s.gust > 1.12 ? 'Gust' : 'Steady';
+    if (this.scenario === 'open') this.link.textContent = s.gust > 1.12 ? 'Gust' : 'Steady';
     const sheetPct = s.sheet * 100;
     this.sheetFill.style.width = `${sheetPct}%`;
     this.sheetMark.style.left = sim.assisted ? `${s.suggestedSheet * 100}%` : '-10px';
@@ -171,6 +213,7 @@ export class Hud {
   }
 
   drawDebrief(sim: Simulation): void {
+    this.title.textContent = 'Session';
     const ctx = this.trackCanvas.getContext('2d');
     if (!ctx) return;
     const w = this.trackCanvas.width;
@@ -243,8 +286,89 @@ export class Hud {
       .join('');
     const note = this.root.querySelector('#debriefnote')!;
     note.textContent = sim.assisted
-      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red arc is an approximate no-go guide. In a tack or gybe it tells you when to change sides. The boat can still sail wherever the forces allow. X or G switches Low and High graphics.'
-      : 'Full manual: no sheet coach, no no-go arc, and no side-change prompt. You still have to cross the boat. Capsize and stall are less forgiving. Menu resumes.';
+      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red arc is an approximate no-go guide. In a tack or gybe it tells you when to change sides. The boat can still sail wherever the forces allow. X or G switches Low and High graphics. H, or LB, opens docking practice.'
+      : 'Full manual: no sheet coach, no no-go arc, and no side-change prompt. You still have to cross the boat. Capsize and stall are less forgiving. Menu resumes. H, or LB, opens docking practice.';
+  }
+
+  drawDockDebrief(sim: Simulation, report: DockReport): void {
+    this.title.textContent = 'Docking attempt';
+    const ctx = this.trackCanvas.getContext('2d');
+    if (!ctx) return;
+    const w = this.trackCanvas.width;
+    const h = this.trackCanvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#082833';
+    ctx.fillRect(0, 0, w, h);
+    const extra: TrackPoint[] = [
+      ...SOLIDS.flatMap((b) => [
+        { x: b.minX, y: b.minY, t: 0 },
+        { x: b.maxX, y: b.maxY, t: 0 },
+      ]),
+      { x: CLEAT.x, y: CLEAT.y, t: 0 },
+      { x: BUOY.x, y: BUOY.y, t: 0 },
+    ];
+    const pts = sim.track.filter((p) => Number.isFinite(p.x)).concat(extra);
+    const bounds = boundsOf(pts, sim.x, sim.y);
+    const mapX = (x: number) => ((x - bounds.minX) / bounds.span) * (w - 40) + 20;
+    const mapY = (y: number) => h - 20 - ((y - bounds.minY) / bounds.span) * (h - 40);
+    ctx.fillStyle = 'rgba(94, 109, 118, 0.85)';
+    for (const b of SOLIDS) {
+      const x = mapX(b.minX);
+      const y = mapY(b.maxY);
+      ctx.fillRect(x, y, mapX(b.maxX) - x, mapY(b.minY) - y);
+    }
+    ctx.fillStyle = '#ffb703';
+    ctx.beginPath();
+    ctx.arc(mapX(CLEAT.x), mapY(CLEAT.y), 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#d24b3e';
+    ctx.beginPath();
+    ctx.arc(mapX(BUOY.x), mapY(BUOY.y), 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#9ef0b0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let drawing = false;
+    for (const p of sim.track) {
+      if (!Number.isFinite(p.x)) {
+        drawing = false;
+        continue;
+      }
+      const x = mapX(p.x);
+      const y = mapY(p.y);
+      if (!drawing) {
+        ctx.moveTo(x, y);
+        drawing = true;
+      } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(mapX(sim.x), mapY(sim.y), 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    const kn = report.approachKn == null ? '—' : `${report.approachKn.toFixed(1)} kn`;
+    const impact = report.impactMs < 0.05 ? 'none' : `${report.impactMs.toFixed(2)} m/s ${report.impactClass}`;
+    const dist = report.distAtStop == null ? '—' : `${report.distAtStop.toFixed(1)} m`;
+    const angle = report.angleAtStopDeg == null ? '—' : `${report.angleAtStopDeg.toFixed(0)}°`;
+    const time = report.timeSec == null ? `${report.elapsed.toFixed(0)} s` : `${report.timeSec.toFixed(0)} s`;
+    const scope = report.scope == null ? '—' : `${report.scope.toFixed(1)}:1`;
+    const held = !report.anchorDown ? 'not dropped' : report.anchorHeld ? 'held' : 'dragged';
+    const rows = [
+      [kn, 'Approach speed'],
+      [impact, 'Impact'],
+      [dist, 'Distance at stop'],
+      [angle, 'Angle at stop'],
+      [time, 'Time'],
+      [scope, 'Anchor scope'],
+      [held, 'Anchor'],
+      [report.moored ? 'yes' : 'no', 'Mooring line'],
+    ];
+    this.stats.innerHTML = rows
+      .map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`)
+      .join('');
+    const note = this.root.querySelector('#debriefnote')!;
+    note.textContent = report.tip;
   }
 }
 

@@ -112,6 +112,29 @@ button.ghost.on { color: var(--amber); border-color: rgba(255, 193, 77, 0.7); }
   padding-bottom: 18px;
 }
 
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(920px, 94vw);
+}
+
+.dockstrip {
+  text-align: center;
+  font-size: clamp(18px, 2vw, 26px);
+  line-height: 1.35;
+  background: rgba(6, 18, 26, 0.78);
+  border-radius: 14px;
+  padding: 10px 16px;
+}
+
+.dockstrip.good { color: var(--good); }
+.dockstrip.bad { color: var(--bad); }
+.dockstrip.hidden { display: none; }
+
+.debrief .ghost { margin-top: 12px; }
+
 .hint {
   max-width: 860px;
   text-align: center;

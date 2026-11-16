@@ -14,6 +14,20 @@ export interface InputState {
   camera: 'chase' | 'cockpit' | 'top' | 'cinema' | null;
   cycleCamera: boolean;
   usingGamepad: boolean;
+  /** H, or LB outside the dock. From the debrief, opens docking practice. */
+  dockPressed: boolean;
+  /** Right stick click, or F. Drop or weigh the anchor in the dock. */
+  anchorPressed: boolean;
+  /** Right bumper. Throw or let go the mooring line. */
+  moorPressed: boolean;
+  /** D-pad up, held. Pay out anchor scope. */
+  scopeOut: boolean;
+  /** D-pad down, held. Take scope in. */
+  scopeIn: boolean;
+  /** Left bumper. Cycle harbour wind. */
+  windPressed: boolean;
+  /** Left stick click. Toggle the light tide. */
+  tidePressed: boolean;
 }
 
 const keys = new Set<string>();
@@ -44,6 +58,13 @@ function edge(prev: boolean, now: boolean): boolean {
 
 const prevButtons = new Array(16).fill(false);
 
+/** In the dock, D-pad up and down pay the anchor rode instead of moving the camera. */
+let padLayout: 'sail' | 'dock' = 'sail';
+
+export function setPadLayout(layout: 'sail' | 'dock'): void {
+  padLayout = layout;
+}
+
 export function readInput(): InputState {
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   const pad = pads[0];
@@ -60,6 +81,13 @@ export function readInput(): InputState {
   let qualityPressed = false;
   let camera: InputState['camera'] = null;
   let usingGamepad = false;
+  let dockPressed = false;
+  let anchorPressed = false;
+  let moorPressed = false;
+  let scopeOut = false;
+  let scopeIn = false;
+  let windPressed = false;
+  let tidePressed = false;
 
   if (pad && pad.connected) {
     usingGamepad = true;
@@ -77,9 +105,21 @@ export function readInput(): InputState {
     resetPressed = edge(prevButtons[8], now[8] ?? false);
     pausePressed = edge(prevButtons[9], now[9] ?? false);
     qualityPressed = edge(prevButtons[2], now[2] ?? false);
-    if (edge(prevButtons[12], now[12] ?? false)) camera = 'chase';
+    anchorPressed = edge(prevButtons[11], now[11] ?? false);
+    moorPressed = edge(prevButtons[5], now[5] ?? false);
+    tidePressed = edge(prevButtons[10], now[10] ?? false);
+    if (padLayout === 'dock') windPressed = edge(prevButtons[4], now[4] ?? false);
+    else dockPressed = edge(prevButtons[4], now[4] ?? false);
+    const up = now[12] ?? false;
+    const down = now[13] ?? false;
+    if (padLayout === 'dock') {
+      scopeOut = up;
+      scopeIn = down;
+    } else {
+      if (edge(prevButtons[12], up)) camera = 'chase';
+      if (edge(prevButtons[13], down)) camera = 'top';
+    }
     if (edge(prevButtons[15], now[15] ?? false)) camera = 'cockpit';
-    if (edge(prevButtons[13], now[13] ?? false)) camera = 'top';
     if (edge(prevButtons[14], now[14] ?? false)) camera = 'chase';
     for (let i = 0; i < 16; i++) prevButtons[i] = now[i] ?? false;
   }
@@ -94,6 +134,8 @@ export function readInput(): InputState {
   if (keys.has('KeyL')) orbitX += 1;
   if (keys.has('KeyI')) orbitY -= 1;
   if (keys.has('KeyK')) orbitY += 1;
+  if (keys.has('KeyU') || keys.has('u')) scopeOut = true;
+  if (keys.has('KeyN') || keys.has('n')) scopeIn = true;
 
   return {
     rudder: Math.max(-1, Math.min(1, rudder)),
@@ -110,6 +152,13 @@ export function readInput(): InputState {
     camera: camera ?? consumeCamera(),
     cycleCamera: consumeKey('KeyC'),
     usingGamepad,
+    dockPressed: dockPressed || consumeKey('KeyH') || consumeKey('h'),
+    anchorPressed: anchorPressed || consumeKey('KeyF') || consumeKey('f'),
+    moorPressed: moorPressed || consumeKey('KeyM') || consumeKey('m'),
+    scopeOut,
+    scopeIn,
+    windPressed: windPressed || consumeKey('KeyZ') || consumeKey('z'),
+    tidePressed: tidePressed || consumeKey('KeyT') || consumeKey('t'),
   };
 }
 
