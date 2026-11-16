@@ -19,11 +19,15 @@ const keys = new Set<string>();
 export function attachKeyboard(target: Window): void {
   target.addEventListener('keydown', (e) => {
     keys.add(e.code);
+    if (e.key) keys.add(e.key.toLowerCase());
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
       e.preventDefault();
     }
   });
-  target.addEventListener('keyup', (e) => keys.delete(e.code));
+  target.addEventListener('keyup', (e) => {
+    keys.delete(e.code);
+    if (e.key) keys.delete(e.key.toLowerCase());
+  });
   target.addEventListener('blur', () => keys.clear());
 }
 
@@ -76,10 +80,10 @@ export function readInput(): InputState {
     for (let i = 0; i < 16; i++) prevButtons[i] = now[i] ?? false;
   }
 
-  if (keys.has('ArrowLeft') || keys.has('KeyA')) rudder -= 1;
-  if (keys.has('ArrowRight') || keys.has('KeyD')) rudder += 1;
-  if (keys.has('ArrowUp') || keys.has('KeyW')) sheetIn = Math.max(sheetIn, 1);
-  if (keys.has('ArrowDown') || keys.has('KeyS')) sheetOut = Math.max(sheetOut, 1);
+  if (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a')) rudder -= 0.5;
+  if (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d')) rudder += 0.5;
+  if (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w')) sheetIn = Math.max(sheetIn, 1);
+  if (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s')) sheetOut = Math.max(sheetOut, 1);
   if (keys.has('Space')) hike = Math.max(hike, 1);
   if (keys.has('KeyJ')) orbitX -= 1;
   if (keys.has('KeyL')) orbitX += 1;
@@ -95,7 +99,7 @@ export function readInput(): InputState {
     orbitY,
     assistPressed: assistPressed || consumeKey('KeyB'),
     resetPressed: resetPressed || consumeKey('KeyR'),
-    pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('Escape'),
+    pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('p') || consumeKey('Escape'),
     qualityPressed: qualityPressed || consumeKey('KeyG') || consumeKey('KeyX'),
     camera: camera ?? consumeCamera(),
     cycleCamera: consumeKey('KeyC'),

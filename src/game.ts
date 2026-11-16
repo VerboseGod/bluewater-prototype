@@ -80,6 +80,11 @@ export class Game {
       this.sim.assisted = !this.sim.assisted;
     };
     this.hud.onToggleQuality = () => this.cycleQuality();
+    this.hud.onTogglePause = () => {
+      this.paused = !this.paused;
+      this.hud.setPaused(this.paused);
+      if (this.paused) this.hud.drawDebrief(this.sim);
+    };
     attachKeyboard(window);
     window.addEventListener('resize', () => this.resize());
     this.resize();

@@ -11,6 +11,7 @@ export class Hud {
   private trueMark: SVGLineElement;
   private modeBtn: HTMLButtonElement;
   private qualityBtn: HTMLButtonElement;
+  private pauseBtn: HTMLButtonElement;
   private fps: HTMLElement;
   private hint: HTMLElement;
   private sheetFill: HTMLElement;
@@ -24,6 +25,7 @@ export class Hud {
   private stats: HTMLElement;
   onToggleMode: () => void = () => undefined;
   onToggleQuality: () => void = () => undefined;
+  onTogglePause: () => void = () => undefined;
 
   constructor(parent: HTMLElement) {
     parent.innerHTML = `
@@ -47,6 +49,7 @@ export class Hud {
           <div class="badges">
             <button class="ghost" id="mode" type="button">Assisted</button>
             <button class="ghost" id="quality" type="button">Performance</button>
+            <button class="ghost" id="pause" type="button">Debrief</button>
             <div class="badge" id="link">Keyboard</div>
             <div class="muted" id="fps">-- fps</div>
           </div>
@@ -88,6 +91,7 @@ export class Hud {
     this.trueMark = parent.querySelector('#truewind')!;
     this.modeBtn = parent.querySelector('#mode')!;
     this.qualityBtn = parent.querySelector('#quality')!;
+    this.pauseBtn = parent.querySelector('#pause')!;
     this.fps = parent.querySelector('#fps')!;
     this.hint = parent.querySelector('#hint')!;
     this.sheetFill = parent.querySelector('#sheetfill')!;
@@ -101,6 +105,7 @@ export class Hud {
     this.stats = parent.querySelector('#stats')!;
     this.modeBtn.addEventListener('click', () => this.onToggleMode());
     this.qualityBtn.addEventListener('click', () => this.onToggleQuality());
+    this.pauseBtn.addEventListener('click', () => this.onTogglePause());
   }
 
   get canvas(): HTMLCanvasElement {
