@@ -11,6 +11,34 @@ import { Simulation } from '../src/sim/sim';
 import type { InputState } from '../src/input';
 import { DT, makeSim } from './support';
 
+/** Metres travelled until the boat is nearly stopped, sail let fly, head to wind. */
+function coastToStop(v0: number): { dist: number; done: boolean; speed: number } {
+  const sim = new Simulation({
+    steady: true,
+    waves: false,
+    assisted: false,
+    windSpeed: 5.66,
+    windFrom: 0,
+    heading: 0,
+    sheet: 1,
+    vx: v0,
+    vy: 0,
+  });
+  sim.boom = 1.4;
+  let dist = 0;
+  let px = sim.x;
+  let py = sim.y;
+  for (let i = 0; i < 60 * 40; i++) {
+    sim.step(DT, { rudder: 0, sheetIn: 0, sheetOut: 1, hike: 0 });
+    dist += Math.hypot(sim.x - px, sim.y - py);
+    px = sim.x;
+    py = sim.y;
+    const speed = Math.hypot(sim.vx, sim.vy);
+    if (speed < 0.15) return { dist, done: true, speed };
+  }
+  return { dist, done: false, speed: Math.hypot(sim.vx, sim.vy) };
+}
+
 function bleed(v0: number, drop = 0.5): { dist: number; done: boolean; speed: number } {
   const sim = new Simulation({
     steady: true,
@@ -77,6 +105,17 @@ function drift(currentX: number): Simulation {
 }
 
 describe('low speed', () => {
+  it('total distance to stop with the sail let fly grows with entry speed', () => {
+    const slow = coastToStop(0.5);
+    const mid = coastToStop(1);
+    const fast = coastToStop(1.5);
+    expect(slow.done, `0.5 m/s ended at ${slow.speed.toFixed(2)}`).toBe(true);
+    expect(mid.done, `1.0 m/s ended at ${mid.speed.toFixed(2)}`).toBe(true);
+    expect(fast.done, `1.5 m/s ended at ${fast.speed.toFixed(2)}`).toBe(true);
+    expect(mid.dist, `1.0 m/s coast ${mid.dist.toFixed(2)} m vs 0.5 m/s ${slow.dist.toFixed(2)} m`).toBeGreaterThan(slow.dist);
+    expect(fast.dist, `1.5 m/s coast ${fast.dist.toFixed(2)} m vs 1.0 m/s ${mid.dist.toFixed(2)} m`).toBeGreaterThan(mid.dist);
+  });
+
   it('carry distance when the sail is let fly decreases with speed', () => {
     const slow = bleed(1.15);
     const fast = bleed(2.35);
