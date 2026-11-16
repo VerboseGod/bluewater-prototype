@@ -11,7 +11,7 @@ import {
 } from 'three';
 import { WAVES } from '../sim/water';
 import type { Gust } from '../sim/wind';
-import { buildGerstner, gerstnerAt, waveCountFor, type GerstnerWave } from './waves';
+import { buildGerstner, gerstnerAt, physicsChop, waveCountFor, type GerstnerWave } from './waves';
 
 const VERT = /* glsl */ `
 uniform float uTime;
@@ -102,8 +102,58 @@ varying float vFoam;
 
 #include <fog_pars_fragment>
 
+float bwHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float bwNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = bwHash(i);
+  float b = bwHash(i + vec2(1.0, 0.0));
+  float c = bwHash(i + vec2(0.0, 1.0));
+  float d = bwHash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+void bwRipple(inout vec3 n, vec3 world, float time) {
+  float dist = distance(world.xz, cameraPosition.xz);
+  float near = 1.0 - smoothstep(5.0, 32.0, dist);
+  vec2 p = world.xz * 1.6 + vec2(time * 0.13, -time * 0.09);
+  float e = 0.28;
+  float h = bwNoise(p);
+  n.x += (bwNoise(p + vec2(e, 0.0)) - h) / e * 0.22 * near;
+  n.z += (bwNoise(p + vec2(0.0, e)) - h) / e * 0.22 * near;
+  vec2 q = world.xz * 4.8 + vec2(-time * 0.28, time * 0.19);
+  float h2 = bwNoise(q);
+  n.x += (bwNoise(q + vec2(e, 0.0)) - h2) / e * 0.08 * near;
+  n.z += (bwNoise(q + vec2(0.0, e)) - h2) / e * 0.08 * near;
+}
+
+float bwKelvin(vec2 worldXZ, vec2 boat, float heading, float speed, float time) {
+  vec2 rel = worldXZ - boat;
+  float c = cos(heading);
+  float s = sin(heading);
+  float fwd = rel.x * c + rel.y * s;
+  float side = -rel.x * s + rel.y * c;
+  float behind = max(0.0, -fwd);
+  float kelvin = 0.354;
+  float armDist = abs(abs(side) - behind * kelvin);
+  float thick = 0.045 + behind * 0.022;
+  float arm = exp(-pow(armDist / max(thick, 0.02), 2.0));
+  float reach = smoothstep(0.45, 1.5, behind) * (1.0 - smoothstep(8.0, 18.0, behind));
+  float inside = 1.0 - smoothstep(behind * kelvin * 0.2, behind * kelvin + 0.15, abs(side));
+  float cross = pow(max(sin(behind * 2.2 - time * 1.5), 0.0), 2.0) * inside * smoothstep(1.0, 2.2, behind);
+  float brk = smoothstep(0.22, 0.8, bwNoise(worldXZ * 0.7 + vec2(time * 0.17, behind * 0.05)) * 0.62 + bwNoise(worldXZ * 2.6 - vec2(time * 0.4, 0.3)) * 0.38);
+  float spd = clamp(speed / 2.6, 0.0, 1.0);
+  return (arm * 0.85 + cross * 0.22) * reach * brk * spd;
+}
+
 void main() {
   vec3 n = normalize(vNormal);
+  bwRipple(n, vWorld, uTime);
+  n = normalize(n);
   vec3 viewDir = normalize(cameraPosition - vWorld);
   float ndotv = max(dot(n, viewDir), 0.0);
   float fres = 0.02 + 0.98 * pow(1.0 - ndotv, 5.0);
@@ -125,11 +175,9 @@ void main() {
   float spd = clamp(uSpeed / 3.2, 0.0, 1.0);
   float bow = smoothstep(0.8, 1.5, fwd) * (1.0 - smoothstep(1.7, 2.4, fwd));
   bow *= 1.0 - smoothstep(0.15, 0.7, abs(side));
-  float behind = -fwd;
-  float keel = abs(abs(side) - behind * 0.2);
-  float trail = (1.0 - smoothstep(0.12, 0.7, keel)) * smoothstep(0.3, 1.4, behind) * (1.0 - smoothstep(7.0, 16.0, behind));
   float crest = smoothstep(0.2, 0.5, vFoam);
-  col = mix(col, vec3(0.84, 0.92, 0.93), clamp(crest * 0.7 + (bow + trail) * spd, 0.0, 1.0) * 0.8);
+  float wake = bwKelvin(vWorld.xz, uBoat, uHeading, uSpeed, uTime);
+  col = mix(col, vec3(0.86, 0.93, 0.94), clamp(crest * 0.45 + bow * spd * 0.35 + wake, 0.0, 0.72));
   float gust = 0.0;
   for (int i = 0; i < 6; i++) {
     float use = float(i < uGusts);
@@ -175,6 +223,36 @@ float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float bwNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float bwKelvin(vec2 worldXZ, vec2 boat, float heading, float speed, float time) {
+  vec2 rel = worldXZ - boat;
+  float c = cos(heading);
+  float s = sin(heading);
+  float fwd = rel.x * c + rel.y * s;
+  float side = -rel.x * s + rel.y * c;
+  float behind = max(0.0, -fwd);
+  float kelvin = 0.354;
+  float armDist = abs(abs(side) - behind * kelvin);
+  float thick = 0.04 + behind * 0.02;
+  float arm = exp(-pow(armDist / max(thick, 0.02), 2.0));
+  float reach = smoothstep(0.4, 1.4, behind) * (1.0 - smoothstep(9.0, 22.0, behind));
+  float inside = 1.0 - smoothstep(behind * kelvin * 0.15, behind * kelvin + 0.12, abs(side));
+  float cross = pow(max(sin(behind * 2.4 - time * 1.6), 0.0), 2.0) * inside * smoothstep(0.8, 2.0, behind);
+  float brk = smoothstep(0.2, 0.82, bwNoise(worldXZ * 0.85 + vec2(time * 0.2, behind * 0.04)) * 0.6 + bwNoise(worldXZ * 3.1 - vec2(time * 0.45, 0.2)) * 0.4);
+  float spd = clamp(speed / 2.4, 0.0, 1.0);
+  return (arm * 0.9 + cross * 0.25) * reach * brk * spd;
+}
+
 void main() {
   vec3 n = normalize(vNormal);
   vec2 wind = uWind;
@@ -185,6 +263,17 @@ void main() {
   float rip = sin(dot(vWorld.xz, wdir) * 1.8 + uTime * 2.6) * sin(dot(vWorld.xz, wperp) * 2.4 - uTime * 1.7);
   n.x += wdir.x * rip * 0.07;
   n.z += wdir.y * rip * 0.07;
+  float distCam = distance(vWorld.xz, cameraPosition.xz);
+  float near = 1.0 - smoothstep(4.0, 30.0, distCam);
+  vec2 rp = vWorld.xz * 2.2 + vec2(uTime * 0.16, -uTime * 0.1);
+  float e = 0.22;
+  float rh = bwNoise(rp);
+  n.x += (bwNoise(rp + vec2(e, 0.0)) - rh) / e * 0.16 * near;
+  n.z += (bwNoise(rp + vec2(0.0, e)) - rh) / e * 0.16 * near;
+  vec2 rq = vWorld.xz * 6.4 + vec2(-uTime * 0.33, uTime * 0.21);
+  float rh2 = bwNoise(rq);
+  n.x += (bwNoise(rq + vec2(e, 0.0)) - rh2) / e * 0.055 * near;
+  n.z += (bwNoise(rq + vec2(0.0, e)) - rh2) / e * 0.055 * near;
 
   float gust = 0.0;
   for (int i = 0; i < 6; i++) {
@@ -242,22 +331,13 @@ void main() {
   float shoulder = along * smoothstep(0.12, 0.38, abs(side)) * (1.0 - smoothstep(0.42, 0.95, abs(side)));
   float hullFoam = (bow * 1.2 + shoulder * 0.75) * spd;
 
-  float wakeFoam = 0.0;
-  for (int i = 0; i < 8; i++) {
-    float use = float(i < uWakeN);
-    vec2 p = uWake[i].xy;
-    float age = uWake[i].z;
-    float rad = uWake[i].w;
-    float d = distance(vWorld.xz, p);
-    float band = 1.0 - smoothstep(rad * 0.15, rad, d);
-    wakeFoam += use * band * (1.0 - clamp(age, 0.0, 1.0));
-  }
-  wakeFoam *= smoothstep(0.4, 1.4, uSpeed);
+  float wakeFoam = bwKelvin(vWorld.xz, uBoat, uHeading, uSpeed, uTime);
+  wakeFoam += uWake[0].z * 0.0;
 
-  float foam = clamp(crest + hullFoam + wakeFoam * 0.95, 0.0, 1.0);
-  float grain = 0.72 + 0.28 * hash(floor(vWorld.xz * 2.5 + uTime * 0.4));
-  vec3 foamCol = vec3(0.82, 0.9, 0.91) * grain;
-  col = mix(col, foamCol, foam * 0.88);
+  float foam = clamp(crest * 0.85 + hullFoam * 0.45 + wakeFoam, 0.0, 1.0);
+  float grain = 0.78 + 0.22 * bwNoise(vWorld.xz * 1.7 + vec2(uTime * 0.15, 0.0));
+  vec3 foamCol = vec3(0.84, 0.92, 0.93) * grain;
+  col = mix(col, foamCol, foam * 0.72);
 
   col *= mix(1.0, 0.62, gust);
   col = mix(col, vec3(0.03, 0.1, 0.14), gust * 0.22);
@@ -368,14 +448,17 @@ export class Ocean {
   private windFrom = Math.PI / 2;
   private windSpeed = 5.66;
 
-  /** Visual swell height at world xz, matching the vertex displacement's vertical part. */
+  /** Rendered water height: Gerstner swell plus the short chop, or flat when sheltered. */
   heightAt(x: number, z: number, time: number): number {
-    return gerstnerAt(x, z, time, this.waves).height;
+    const g = gerstnerAt(x, z, time, this.waves);
+    const p = physicsChop(x, z, time, this.material.uniforms.uPhys.value as number);
+    return g.height + p.height;
   }
 
   slopeAt(x: number, z: number, time: number): { slopeX: number; slopeZ: number } {
-    const s = gerstnerAt(x, z, time, this.waves);
-    return { slopeX: s.slopeX, slopeZ: s.slopeZ };
+    const g = gerstnerAt(x, z, time, this.waves);
+    const p = physicsChop(x, z, time, this.material.uniforms.uPhys.value as number);
+    return { slopeX: g.slopeX + p.slopeX, slopeZ: g.slopeZ + p.slopeZ };
   }
 
   setSun(dir: Vector3, horizon: Color): void {

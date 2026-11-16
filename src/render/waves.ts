@@ -92,3 +92,26 @@ export function gerstnerAt(x: number, z: number, time: number, waves: readonly G
 export function physicsWaves(count: number): readonly Wave[] {
   return WAVES.slice(0, Math.min(count, WAVES.length));
 }
+
+/**
+ * The short chop the water shader adds on top of the Gerstner swell.
+ * The phase matches the vertex shader's `uPhys` loop.
+ */
+export function physicsChop(x: number, z: number, time: number, count: number): SurfacePoint {
+  let height = 0;
+  let slopeX = 0;
+  let slopeZ = 0;
+  const n = Math.min(Math.max(0, count), WAVES.length);
+  for (let i = 0; i < n; i++) {
+    const w = WAVES[i];
+    const k = (Math.PI * 2) / w.wavelength;
+    const omega = Math.sqrt(9.81 * k) * 0.55 + w.speed * 0.15;
+    const phase = k * (w.dirX * x + w.dirZ * z) + w.phase - omega * time;
+    const s = Math.sin(phase);
+    const c = Math.cos(phase);
+    height += w.amplitude * s;
+    slopeX += w.amplitude * k * w.dirX * c;
+    slopeZ += w.amplitude * k * w.dirZ * c;
+  }
+  return { height, slopeX, slopeZ };
+}

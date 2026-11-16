@@ -70,7 +70,7 @@ Low is the default. It is the setting meant for a mid laptop iGPU and Edge on Xb
 
 `?demo=1` plays a cinematic reel on High: a beam reach with way on, sheet in, a tack, a bear-away, a gybe, then the debrief. `?shot=1` holds the boat and locks the chase camera for a still. `?bench=1&quality=low` (or `high`) records frame time on `window.__BLUEWATER__.bench` after a short warm-up.
 
-The dinghy, sailor, buoys, and coastline are original procedural geometry written in this repository. There is no third-party mesh. The water is a Gerstner shader driven by the sim wind: swell, Fresnel reflection of the sky, subsurface colour, sun glint, crest and hull foam, a wake, and bow spray. Gust patches use the existing gust field and read as darker ripples. The hull and sail pick up the sky through the scene environment map.
+The dinghy, sailor, buoys, and coastline are original procedural geometry written in this repository. There is no third-party mesh. The water is a Gerstner shader driven by the sim wind: swell, Fresnel reflection of the sky, subsurface colour, sun glint, crest foam, a soft Kelvin wake, and fine bow spray. Near the camera the surface picks up a subtle ripple normal. The hull samples that same surface at the bow, stern, and cockpit so it pitches and rolls with the sea. Gust patches use the existing gust field and read as darker ripples. The hull and sail pick up the sky through the scene environment map. Low and High still share the physics.
 
 ## Docking and anchoring
 

@@ -18,7 +18,7 @@ import type { DockReport } from './dock/score';
 import { Hud, hintFor } from './hud';
 import { attachKeyboard, readInput, rumble, setPadLayout, type InputState } from './input';
 import { HarbourView } from './render/harbour';
-import { sampleWater } from './sim/water';
+import { hullFloat } from './render/float';
 import { KT } from './sim/math';
 import { Simulation, type Controls, type SimSnapshot } from './sim/sim';
 
@@ -263,17 +263,24 @@ export class Game {
   private draw(dt: number): void {
     const s = this.sim.snapshot;
     const time = this.sim.time;
-    const wavy = !this.dock;
-    const water = sampleWater(s.x, s.y, time, wavy, 4);
-    const swell = wavy ? this.ocean.heightAt(s.x, s.y, time) : 0;
-    const slope = wavy ? this.ocean.slopeAt(s.x, s.y, time) : { slopeX: 0, slopeZ: 0 };
+    const fx = Math.cos(s.heading);
+    const fz = Math.sin(s.heading);
+    const sx = Math.sin(s.heading);
+    const sz = -Math.cos(s.heading);
+    const surf = (along: number, port: number) =>
+      this.ocean.heightAt(s.x + fx * along - sx * port, s.y + fz * along - sz * port, time);
+    const pose = hullFloat({
+      bow: surf(1.65, 0),
+      stern: surf(-1.65, 0),
+      cock: surf(-0.45, 0),
+      port: surf(-0.4, 0.48),
+      stbd: surf(-0.4, -0.48),
+    });
     if (this.harbour && this.dock) this.harbour.update(this.dock.view());
-    this.boat.group.position.set(s.x, water.height + swell + (s.capsized ? 0.05 : 0), s.y);
+    this.boat.group.position.set(s.x, pose.y + (s.capsized ? 0.05 : 0), s.y);
     this.boat.group.rotation.set(0, -s.heading, 0);
-    this.boat.group.rotateX(-s.heel + (s.capsized ? s.capsizeSide * 1.15 : 0));
-    const climbPhys = -(water.normalX * Math.cos(s.heading) + water.normalZ * Math.sin(s.heading));
-    const climbVis = -(slope.slopeX * Math.cos(s.heading) + slope.slopeZ * Math.sin(s.heading));
-    this.boat.group.rotateZ(climbPhys * 0.45 + climbVis * 0.22);
+    this.boat.group.rotateX(-s.heel - pose.roll + (s.capsized ? s.capsizeSide * 1.15 : 0));
+    this.boat.group.rotateZ(pose.pitch);
     this.boat.update(s, s.rudder);
     const shake = s.shake;
     this.boat.group.position.y += Math.sin(time * 40) * shake * 0.08;
@@ -287,13 +294,15 @@ export class Game {
       const sz = s.y - Math.sin(s.heading) * 1.9;
       this.wake.push(sx, sz, s.heading, s.speed, dt);
     }
-    const heightAt = (x: number, z: number) => sampleWater(x, z, time, true, 4).height + this.ocean.heightAt(x, z, time);
+    const heightAt = (x: number, z: number) => this.ocean.heightAt(x, z, time);
     this.wake.conform(heightAt);
-    this.spray.update(dt, s.x, s.y, s.heading, s.speed, water.height + swell, this.camera.position, this.paused);
+    const bowSlope = this.ocean.slopeAt(s.x + fx * 1.7, s.y + fz * 1.7, time);
+    const impact = Math.min(2, Math.abs(bowSlope.slopeX) + Math.abs(bowSlope.slopeZ) + s.speed * 0.12);
+    this.spray.update(dt, s.x, s.y, s.heading, s.speed, pose.y, this.camera.position, this.paused, impact);
     this.marks.update(time, (x, z) => this.ocean.heightAt(x, z, time));
     this.sky.sky.material.uniforms.time.value = time;
     followBoat(this.sky, s.x, s.y);
-    this.placeCamera(s, water.height + swell, dt);
+    this.placeCamera(s, pose.y, dt);
     this.renderer.render(this.scene, this.camera);
   }
 

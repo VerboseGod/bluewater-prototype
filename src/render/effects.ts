@@ -130,9 +130,14 @@ interface Drop {
   vz: number;
   life: number;
   max: number;
+  /** Long axis of the streak, in metres. */
+  len: number;
+  /** Short axis. Droplets stay near this; sheet spray is flatter. */
+  wid: number;
+  spin: number;
 }
 
-/** Bow spray. Particle count stays small so the water pass remains the only heavy draw. */
+/** Fine bow droplets and a short sheet of spray. Count stays small. */
 export class BowSpray {
   readonly mesh: InstancedMesh;
   private drops: Drop[] = [];
@@ -140,24 +145,24 @@ export class BowSpray {
   private carry = 0;
 
   constructor(quality: 'low' | 'high') {
-    this.max = quality === 'high' ? 120 : 40;
-    const geo = new PlaneGeometry(0.22, 0.22);
+    this.max = quality === 'high' ? 180 : 64;
+    const geo = new PlaneGeometry(1, 1);
     const mat = new MeshBasicMaterial({
-      map: puff(),
+      map: streak(),
       transparent: true,
       depthWrite: false,
       blending: AdditiveBlending,
-      opacity: 0.85,
+      opacity: 0.8,
       side: DoubleSide,
     });
-    this.mesh = new InstancedMesh(geo, mat, 120);
+    this.mesh = new InstancedMesh(geo, mat, 180);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 3;
     this.mesh.count = 0;
   }
 
   setQuality(quality: 'low' | 'high'): void {
-    this.max = quality === 'high' ? 120 : 40;
+    this.max = quality === 'high' ? 180 : 64;
     if (this.drops.length > this.max) this.drops.length = this.max;
   }
 
@@ -170,26 +175,33 @@ export class BowSpray {
     waterY: number,
     camera: Vector3,
     paused: boolean,
+    impact = 0,
   ): void {
-    if (!paused && speed > 1.05) {
-      const rate = Math.min(50, (speed - 0.9) * (this.max > 40 ? 18 : 9));
+    const vigour = Math.max(0, speed - 0.7) * (0.45 + Math.min(1.4, impact));
+    if (!paused && vigour > 0.05) {
+      const rate = Math.min(90, vigour * (this.max > 64 ? 26 : 12));
       this.carry += rate * dt;
       const sideX = Math.sin(heading);
       const sideZ = -Math.cos(heading);
-      const bowX = x + Math.cos(heading) * 1.9;
-      const bowZ = z + Math.sin(heading) * 1.9;
+      const bowX = x + Math.cos(heading) * 1.85;
+      const bowZ = z + Math.sin(heading) * 1.85;
       while (this.carry >= 1 && this.drops.length < this.max) {
         this.carry -= 1;
+        const sheet = Math.random() < 0.28 + impact * 0.25;
         const s = Math.random() < 0.5 ? -1 : 1;
+        const kick = sheet ? 0.35 + speed * 0.2 : 0.9 + speed * 0.55 + impact * 0.8;
         this.drops.push({
-          x: bowX + sideX * s * 0.28,
-          y: waterY + 0.12,
-          z: bowZ + sideZ * s * 0.28,
-          vx: -Math.cos(heading) * 0.3 + sideX * s * (0.8 + speed * 0.45),
-          vy: 1.1 + speed * 0.38 + Math.random() * 0.6,
-          vz: -Math.sin(heading) * 0.3 + sideZ * s * (0.8 + speed * 0.45),
+          x: bowX + sideX * s * (sheet ? 0.16 : 0.22 + Math.random() * 0.12),
+          y: waterY + (sheet ? 0.05 : 0.08 + Math.random() * 0.06),
+          z: bowZ + sideZ * s * (sheet ? 0.16 : 0.22 + Math.random() * 0.12),
+          vx: -Math.cos(heading) * 0.15 + sideX * s * kick,
+          vy: sheet ? 0.15 + impact * 0.35 + Math.random() * 0.2 : 0.45 + speed * 0.22 + impact * 1.1 + Math.random() * 0.35,
+          vz: -Math.sin(heading) * 0.15 + sideZ * s * kick,
           life: 0,
-          max: 0.4 + Math.random() * 0.35,
+          max: sheet ? 0.1 + Math.random() * 0.1 : 0.14 + Math.random() * 0.16,
+          len: sheet ? 0.16 + speed * 0.04 : 0.035 + Math.random() * 0.03,
+          wid: sheet ? 0.012 : 0.012 + Math.random() * 0.01,
+          spin: Math.random() * Math.PI,
         });
       }
     } else {
@@ -205,13 +217,15 @@ export class BowSpray {
       d.x += d.vx * dt;
       d.y += d.vy * dt;
       d.z += d.vz * dt;
-      if (d.y < waterY - 0.05) continue;
+      if (d.y < waterY - 0.02) continue;
       alive.push(d);
       if (n >= this.max) continue;
       const t = d.life / d.max;
       dummy.position.set(d.x, d.y, d.z);
       dummy.lookAt(camera);
-      dummy.scale.setScalar(0.35 + t * 1.5);
+      dummy.rotateZ(d.spin + t * 2.5);
+      const fade = 1 - t * t;
+      dummy.scale.set(d.len * fade, d.wid * (0.6 + fade), 1);
       dummy.updateMatrix();
       this.mesh.setMatrixAt(n, dummy.matrix);
       n++;
@@ -222,17 +236,23 @@ export class BowSpray {
   }
 }
 
-function puff(): CanvasTexture {
+function streak(): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 32;
-  c.height = 32;
+  c.height = 16;
   const g = c.getContext('2d');
   if (g) {
-    const grad = g.createRadialGradient(16, 16, 1, 16, 16, 15);
-    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
+    const grad = g.createLinearGradient(0, 8, 32, 8);
+    grad.addColorStop(0, 'rgba(255,255,255,0)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(0.7, 'rgba(255,255,255,0.45)');
     grad.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = grad;
-    g.fillRect(0, 0, 32, 32);
+    g.fillRect(0, 5, 32, 6);
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath();
+    g.ellipse(22, 8, 2.2, 1.4, 0, 0, Math.PI * 2);
+    g.fill();
   }
   const tex = new CanvasTexture(c);
   tex.colorSpace = SRGBColorSpace;
