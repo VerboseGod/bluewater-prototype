@@ -23,7 +23,10 @@ import { LearnDirector } from './learn/director';
 import { launchFor, sampleOf, type DockView, type LessonLaunch } from './learn/model';
 import { LearnOverlay } from './learn/overlay';
 import { pilotStick } from './learn/pilot';
-import { attachKeyboard, readInput, rumble, setPadLayout, type InputState } from './input';
+import { attachKeyboard, readCoopKeys, readInput, readPads, rumble, setPadLayout, type InputState } from './input';
+import { CoopOverlay } from './coop/overlay';
+import { LEFT_MARK, RIGHT_MARK } from './coop/drill';
+import { CoopSession } from './coop/session';
 import { HarbourView } from './render/harbour';
 import { chaseAim } from './render/chase';
 import { TrackRibbon } from './render/ribbon';
@@ -99,6 +102,8 @@ export class Game {
   private benchDone = false;
   private stick: Controls | null = null;
   private learn: LearnDirector | null = null;
+  private coop: CoopSession | null = null;
+  private coopOverlay: CoopOverlay;
   private overlay: LearnOverlay;
   private ribbon: TrackRibbon;
   private pilotMode: 'off' | 'basics' | 'tack' = 'off';
@@ -110,8 +115,9 @@ export class Game {
     const dockQuery = scenario === 'dock';
     const harbourQuery = scenario === 'harbour';
     const learnQuery = scenario === 'learn';
+    const coopQuery = scenario === 'coop';
     this.quality = params.get('quality') === 'high' || params.has('demo') ? 'high' : 'low';
-    this.demo = params.has('demo') && !dockQuery && !harbourQuery && !learnQuery ? new DemoDirector() : null;
+    this.demo = params.has('demo') && !dockQuery && !harbourQuery && !learnQuery && !coopQuery ? new DemoDirector() : null;
     const pilot = params.get('pilot');
     this.pilotMode = pilot === 'tack' ? 'tack' : pilot === '1' || pilot === 'basics' ? 'basics' : 'off';
     this.lessonQuery = Number(params.get('lesson')) || 0;
@@ -149,6 +155,9 @@ export class Game {
     this.boat.setContactShadow(true);
     this.coast = makeCoast();
     this.overlay = new LearnOverlay(root);
+    this.coopOverlay = new CoopOverlay(root);
+    this.coopOverlay.onJoin = () => this.coop?.joinHuman();
+    this.coopOverlay.onAi = () => this.coop?.joinAi();
     this.ribbon = new TrackRibbon();
     this.scene.add(this.ocean.mesh, this.coast, this.marks.group, this.cues.group, this.wake.mesh, this.spray.mesh, this.boat.group, this.ribbon.mesh);
     this.overlay.onConfirm = () => this.confirmLearn();
@@ -165,8 +174,11 @@ export class Game {
     this.hud.onToggleQuality = () => this.cycleQuality();
     this.hud.onTogglePause = () => {
       this.paused = !this.paused;
-      this.hud.setPaused(this.paused);
-      if (this.paused) this.showDebrief();
+      if (this.coop) this.showCoopPause();
+      else {
+        this.hud.setPaused(this.paused);
+        if (this.paused) this.showDebrief();
+      }
     };
     this.hud.onToggleDock = () => this.toggleScenario();
     this.hud.onToggleHarbour = () => this.toggleHarbour();
@@ -179,6 +191,7 @@ export class Game {
     if (query.get('scenario') === 'dock') this.enterDock(query.get('demo') === '1');
     if (harbourQuery) this.enterHarbour(params.has('demo') && !this.reel);
     if (learnQuery) this.enterLearn(true);
+    if (coopQuery) this.enterCoop();
   }
 
   start(): void {
@@ -211,10 +224,45 @@ export class Game {
     this.sim.wind.steady = steady;
   }
 
-  scenario(): 'open' | 'dock' | 'harbour' | 'learn' {
+  scenario(): 'open' | 'dock' | 'harbour' | 'learn' | 'coop' {
+    if (this.coop) return 'coop';
     if (this.learn) return 'learn';
     if (this.marina) return 'harbour';
     return this.dock ? 'dock' : 'open';
+  }
+
+  coopState(): {
+    phase: 'join' | 'sail' | 'done';
+    role: string;
+    call: string;
+    joined: boolean;
+    tacks: number;
+    sync: number;
+    tackQuality: number;
+    vang: number;
+    roundedLeft: boolean;
+    roundedRight: boolean;
+    banner: string;
+  } | null {
+    if (!this.coop) return null;
+    const view = this.coop.view({
+      sheet: this.sim.snapshot.sheet,
+      suggested: this.sim.snapshot.suggestedSheet,
+      time: this.sim.time,
+    });
+    return {
+      phase: view.phase,
+      role: view.role,
+      call: view.call,
+      joined: view.joined,
+      tacks: view.tacks,
+      sync: view.sync,
+      tackQuality: view.tackQuality,
+      vang: view.vang,
+      roundedLeft: view.roundedLeft,
+      roundedRight: view.roundedRight,
+      banner: view.banner,
+    };
   }
 
   learnState(): {
@@ -249,14 +297,14 @@ export class Game {
 
   private frame(t: number): void {
     const raw = this.last ? (t - this.last) / 1000 : this.step;
-    const real = Math.min(this.reel ? 0.3 : this.pace > 1 ? 0.12 : 0.05, raw);
+    const real = Math.min(this.coop ? 0.1 : this.reel ? 0.3 : this.pace > 1 ? 0.12 : 0.05, raw);
     if (this.reel && !this.paused) this.reelT += Math.min(0.3, raw);
     const dt = this.capture ? 1 / 30 : real;
     this.visual += dt;
     this.last = t;
     if (!this.capture) this.fps += (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
     let input = readInput();
-    if (this.demo && !this.dock && !this.marina && !this.learn && !this.paused) {
+    if (this.demo && !this.dock && !this.marina && !this.learn && !this.coop && !this.paused) {
       const s = this.sim.snapshot;
       const cmd = this.demo.step(dt, s.heading, s.sheet, s.vFwd);
       input = {
@@ -272,7 +320,7 @@ export class Game {
     }
     this.applyInput(input, dt);
     this.draw(dt);
-    const hint = this.learn
+    const hint = this.learn || this.coop
       ? { text: '', urgent: false }
       : this.marina
         ? this.marina.hint()
@@ -298,6 +346,7 @@ export class Game {
       this.ribbon.clear();
       this.hud.root.classList.remove('picking-lesson');
     }
+    this.paintCoop();
     this.hud.setFps(this.capture ? 0 : this.fps);
     if (this.paused) this.showDebrief();
     this.noteBench(raw);
@@ -323,8 +372,11 @@ export class Game {
     }
     if (input.pausePressed) {
       this.paused = !this.paused;
-      this.hud.setPaused(this.paused);
-      if (this.paused) this.showDebrief();
+      if (this.coop) this.showCoopPause();
+      else {
+        this.hud.setPaused(this.paused);
+        if (this.paused) this.showDebrief();
+      }
     }
     if (input.dockPressed && this.paused) this.toggleScenario();
     if (input.assistPressed) this.sim.assisted = !this.sim.assisted;
@@ -345,13 +397,31 @@ export class Game {
     if (!this.paused) {
       this.acc += dt * this.pace;
       let guard = 0;
-      const guardMax = this.pace > 1 ? 90 : this.reel ? 24 : 5;
+      const guardMax = this.coop ? 8 : this.pace > 1 ? 90 : this.reel ? 24 : 5;
       while (this.acc >= this.step && guard < guardMax) {
         let frameInput = this.stick ? { ...input, ...this.stick } : input;
         if (this.reel && this.marina && !this.stick) frameInput = reelStick(frameInput, this.sim.heading, this.reelHeading, this.reelT, this.sim.snapshot.speed);
         if (this.marina) this.marina.step(this.step, frameInput);
         else if (this.dock) this.dock.step(this.step, frameInput);
-        else {
+        else if (this.coop) {
+          this.coop.noteTime(this.sim.time);
+          const controls = this.coop.tick(this.step, readPads()[0], readPads()[1], readCoopKeys(), {
+            twa: this.sim.snapshot.twa,
+            awa: this.sim.snapshot.awa,
+            sheet: this.sim.sheet,
+            suggested: this.sim.snapshot.suggestedSheet,
+            heel: this.sim.heel,
+            crew: this.sim.crew,
+            tackQuality: this.sim.lastTackQuality,
+            x: this.sim.x,
+            y: this.sim.y,
+            heading: this.sim.heading,
+            time: this.sim.time,
+            windFrom: this.sim.wind.baseFrom,
+            tackCount: this.sim.marks.filter((mark) => mark.type === 'tack').length,
+          });
+          this.sim.step(this.step, controls);
+        } else {
           this.sim.step(this.step, this.stick ?? {
             rudder: input.rudder,
             sheetIn: input.sheetIn,
@@ -518,6 +588,11 @@ export class Game {
   }
 
   private showDebrief(): void {
+    if (this.coop) {
+      this.hud.setPaused(false);
+      this.coopOverlay.showReport(this.coop.report(this.sim.time));
+      return;
+    }
     if (this.marina) this.hud.drawHarbourDebrief(this.sim, this.marina.report(), this.marina.world);
     else if (this.dock) this.hud.drawDockDebrief(this.sim, this.dock.report());
     else this.hud.drawDebrief(this.sim);
@@ -546,7 +621,80 @@ export class Game {
     this.overlay.hide();
   }
 
+  private clearCoop(): void {
+    this.coop = null;
+    this.coopOverlay.hide();
+    this.boat.setPair(null, null);
+    this.boat.setVang(null);
+    this.marks.setCourse(null);
+    this.hud.root.classList.remove('coop-on');
+  }
+
+  private showCoopPause(): void {
+    this.hud.setPaused(false);
+    if (!this.coop) return;
+    if (this.paused) this.coopOverlay.showReport(this.coop.report(this.sim.time));
+  }
+
+  private paintCoop(): void {
+    this.hud.root.classList.toggle('coop-on', !!this.coop);
+    if (!this.coop) return;
+    const view = this.coop.view({
+      sheet: this.sim.snapshot.sheet,
+      suggested: this.sim.snapshot.suggestedSheet,
+      time: this.sim.time,
+    });
+    this.boat.setPair(view.helmStbd, view.crewStbd);
+    this.boat.setVang(view.vang);
+    const pads = readPads().filter((pad) => pad.connected).length;
+    this.hud.setLink(pads >= 2 ? '2 pads' : pads === 1 ? '1 pad' : 'Keyboard');
+    if (view.phase === 'done') {
+      this.paused = true;
+      return;
+    }
+    if (this.paused) return;
+    if (view.phase === 'join') this.coopOverlay.showJoin();
+    else this.coopOverlay.showSail(view);
+  }
+
+  private enterCoop(): void {
+    this.clearCoop();
+    this.closeLearn();
+    this.dock = null;
+    this.marina = null;
+    this.pace = 1;
+    if (this.harbour) this.harbour.group.visible = false;
+    if (this.herzliya) this.herzliya.group.visible = false;
+    this.coast.visible = true;
+    this.marks.group.visible = true;
+    this.ocean.setSheltered(false);
+    this.sky.fog.density = 0.0085;
+    this.setTime('day');
+    setShadowStage(this.sky, 'boat', this.quality === 'high');
+    setPadLayout('coop');
+    this.sim = new Simulation({
+      windSpeed: 5.66,
+      windFrom: Math.PI / 2,
+      steady: true,
+      waves: false,
+      assisted: true,
+    });
+    this.sim.placeCourse(46, 4.6, 1);
+    this.sim.step(1 / 60, { rudder: 0, sheetIn: 0, sheetOut: 0, hike: 0, moveIn: 0 });
+    this.coop = new CoopSession();
+    this.coop.helmStbd = this.sim.crew;
+    this.coop.crewStbd = this.sim.crew;
+    this.marks.setCourse([
+      [LEFT_MARK.x, LEFT_MARK.y],
+      [RIGHT_MARK.x, RIGHT_MARK.y],
+    ]);
+    this.hud.setScenario('coop');
+    this.paused = false;
+    this.hud.setPaused(false);
+  }
+
   private enterDock(demo: boolean): void {
+    this.clearCoop();
     this.closeLearn();
     this.dock = new DockSession({ demo });
     this.sim = this.dock.sim;
@@ -563,6 +711,7 @@ export class Game {
   }
 
   private enterHarbour(demo: boolean): void {
+    this.clearCoop();
     this.closeLearn();
     if (this.dock) {
       this.dock = null;
@@ -596,6 +745,7 @@ export class Game {
   }
 
   private enterOpen(): void {
+    this.clearCoop();
     this.closeLearn();
     this.dock = null;
     this.marina = null;
@@ -758,10 +908,11 @@ export class Game {
     else if (this.pilotMode === 'basics') this.launchLesson(this.learn.begin(0));
   }
 
-  private goPlace(place: 'open' | 'dock' | 'harbour' | 'learn'): void {
+  private goPlace(place: 'open' | 'dock' | 'harbour' | 'learn' | 'coop'): void {
     if (place === 'open') this.enterOpen();
     else if (place === 'dock') this.enterDock(false);
     else if (place === 'learn') this.enterLearn(false);
+    else if (place === 'coop') this.enterCoop();
     else this.enterHarbour(false);
     this.paused = false;
     this.hud.setPaused(false);

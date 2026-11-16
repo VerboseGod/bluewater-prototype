@@ -94,6 +94,27 @@ Come alongside with the sail luffing. The mooring line reaches about a metre and
 
 The debrief for an attempt shows approach speed, impact speed, distance and angle when you stopped, time, anchor scope, and whether it held, plus one plain-language tip. In this scenario D-pad up and down pay the rode. D-pad left and right, and keys 1 / 2 / 3, still move the camera. V is still the cinematic camera.
 
+## Co-op crew
+
+`?scenario=coop` is local couch co-op for two people on the one boat. It is also in the Places menu, as Co-op crew. There is no network, no account, and no second computer. Two controllers on the same machine, or one keyboard split in half.
+
+The boat is still the singlehanded dinghy. Co-op only splits who sends the controls. Helm (controller 1) steers, hikes, and calls the tack. Crew (controller 2) trims the mainsheet, hikes on the wire, and works a kicker. The kicker does not add a new sail force. Held on, it slows how fast the mainsheet can run out. The weight of the two of them is still the one sailor offset the boat already had.
+
+A tack is a call. Helm presses RB, or Q: "ready about". The tiller will not go hard over until crew answers on Y, or U. Then helm turns, and crew eases, crosses, and trims inside the window. The debrief keeps the tack-quality number the boat already computes, and adds a crew-sync score for the answer, the cross, the sheet, and the vang. The drill is an upwind beat: three tacks, two marks, and back. Time, tack quality, and sync are on the card, with a line for each role.
+
+One controller, or Enter, sails with an AI crew. Open water, the dock, the harbour, and the lessons are unchanged, and they do not grow a second person.
+
+| Xbox | Keyboard | Who | Action |
+| --- | --- | --- | --- |
+| Left stick | A D, or arrows | Helm | Steer the bow |
+| A / B | W / S | Helm | Hike out / sit in |
+| RB | Q | Helm | Ready about, or stand by to gybe |
+| Triggers | I / K | Crew | Sheet in / sheet out |
+| A / B | J / L | Crew | Trapeze / sit in |
+| Y | U | Crew | Ready. U also joins |
+| X | O | Crew | Vang on / off |
+| — | Enter | — | Sail with the AI crew |
+
 ## Learn to sail
 
 `?scenario=learn` opens six lessons for someone who has never held a tiller. It is also in the Places menu, as Learn to sail. The lessons are where the wind comes from, a beam reach, the points of sail, a tack, a safe gybe, and coming back to the pontoon head-to-wind. Each one is a short line of coaching, with Xbox glyphs, and the sim decides when it is done. The debrief gives one to three stars. Progress is kept in the browser.

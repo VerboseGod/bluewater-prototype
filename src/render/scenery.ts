@@ -53,19 +53,27 @@ interface Mark {
   mesh: Group;
 }
 
+const OPEN_MARKS: [number, number][] = [
+  [18, 14],
+  [42, -22],
+  [-26, 30],
+  [78, 10],
+  [8, -36],
+];
+
 export class Marks {
   readonly group = new Group();
   private marks: Mark[] = [];
 
   constructor() {
-    const spots: [number, number][] = [
-      [18, 14],
-      [42, -22],
-      [-26, 30],
-      [78, 10],
-      [8, -36],
-    ];
-    for (const [x, z] of spots) {
+    this.setCourse(null);
+  }
+
+  /** Replace the buoys. Null puts the open-water set back. */
+  setCourse(spots: [number, number][] | null): void {
+    for (const mark of this.marks) this.group.remove(mark.mesh);
+    this.marks = [];
+    for (const [x, z] of spots ?? OPEN_MARKS) {
       const mesh = makeBuoy();
       mesh.position.set(x, 0, z);
       this.group.add(mesh);

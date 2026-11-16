@@ -61,7 +61,7 @@ export class Hud {
   private title: HTMLElement;
   private scenarioBtn: HTMLButtonElement;
   private scenarioMenu: HTMLButtonElement;
-  private scenario: 'open' | 'dock' | 'harbour' | 'learn' = 'open';
+  private scenario: 'open' | 'dock' | 'harbour' | 'learn' | 'coop' = 'open';
   private sources: HTMLElement;
   private placesBtn: HTMLButtonElement;
   private placesPop: HTMLElement;
@@ -73,7 +73,7 @@ export class Hud {
   onTogglePause: () => void = () => undefined;
   onToggleDock: () => void = () => undefined;
   onToggleHarbour: () => void = () => undefined;
-  onPlace: (place: 'open' | 'dock' | 'harbour' | 'learn') => void = () => undefined;
+  onPlace: (place: 'open' | 'dock' | 'harbour' | 'learn' | 'coop') => void = () => undefined;
   onTime: (mode: 'day' | 'golden' | 'dusk') => void = () => undefined;
 
   constructor(parent: HTMLElement) {
@@ -106,6 +106,7 @@ export class Hud {
                 <button type="button" data-place="dock">Docking practice</button>
                 <button type="button" data-place="harbour">Herzliya</button>
                 <button type="button" data-place="learn">Learn to sail</button>
+                <button type="button" data-place="coop">Co-op crew</button>
                 <button type="button" data-time="day">Day</button>
                 <button type="button" data-time="golden">Golden hour</button>
                 <button type="button" data-time="dusk">Dusk</button>
@@ -203,7 +204,7 @@ export class Hud {
     this.placesBtn.addEventListener('click', () => this.placesPop.classList.toggle('hidden'));
     this.placesPop.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
-      const place = target.dataset.place as 'open' | 'dock' | 'harbour' | 'learn' | undefined;
+      const place = target.dataset.place as 'open' | 'dock' | 'harbour' | 'learn' | 'coop' | undefined;
       const time = target.dataset.time as 'day' | 'golden' | 'dusk' | undefined;
       if (place) this.onPlace(place);
       if (time) this.onTime(time);
@@ -214,6 +215,10 @@ export class Hud {
       this.sources.classList.remove('hidden');
     });
     sourcesClose.addEventListener('click', () => this.sources.classList.add('hidden'));
+  }
+
+  setLink(text: string): void {
+    this.link.textContent = text;
   }
 
   setTime(mode: 'day' | 'golden' | 'dusk'): void {
@@ -229,13 +234,13 @@ export class Hud {
     this.pauseBtn.textContent = paused ? 'Resume' : 'Debrief';
   }
 
-  setScenario(mode: 'open' | 'dock' | 'harbour' | 'learn'): void {
+  setScenario(mode: 'open' | 'dock' | 'harbour' | 'learn' | 'coop'): void {
     this.scenario = mode;
     const leave = mode === 'open' ? 'Herzliya' : 'Open water';
     this.scenarioBtn.textContent = leave;
     this.scenarioMenu.textContent = leave;
     this.placesBtn.textContent =
-      mode === 'learn' ? 'Learn' : mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
+      mode === 'coop' ? 'Co-op' : mode === 'learn' ? 'Learn' : mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
     if (mode !== 'open') this.link.textContent = 'Keyboard';
     this.legend.textContent =
       mode === 'dock'
@@ -244,7 +249,9 @@ export class Hud {
           ? 'Steer · sheet · Q paddle · Z wind · M line · Places for light · Menu chart · X graphics'
           : mode === 'learn'
             ? 'Stick steers · triggers sheet · A hikes · B crosses · D-pad and A choose a lesson · Menu leaves it'
-            : 'Stick steers · triggers sheet · A out · B in · Y assisted · Places · V cinematic · Menu debrief · X graphics';
+            : mode === 'coop'
+              ? 'Helm stick and A · crew triggers and A · RB ready about · Y ready · two pads, one boat'
+              : 'Stick steers · triggers sheet · A out · B in · Y assisted · Places · V cinematic · Menu debrief · X graphics';
     if (mode === 'open') this.strip.classList.add('hidden');
   }
 
