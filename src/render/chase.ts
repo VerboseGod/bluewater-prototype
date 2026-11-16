@@ -23,8 +23,10 @@ export function chaseAim(
   twa: number,
   waterY: number,
   pitch: number,
+  /** Hold this windward side through a tack so the camera does not swap quarters mid-turn. */
+  windwardHold?: number,
 ): ChaseAim {
-  const windward = windwardSign(awa, twa);
+  const windward = windwardHold || windwardSign(awa, twa);
   const fx = Math.cos(heading);
   const fz = Math.sin(heading);
   const sx = Math.sin(heading);

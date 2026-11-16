@@ -86,6 +86,23 @@ describe('call and response', () => {
     const turning = machine.step(callInput({ callDown: true, readyDown: true, rudder: 0.4 }));
     expect(turning.phase).toBe('turning');
     expect(turning.rudder).toBeCloseTo(0.4);
+    expect(turning.banner).toBe('Lee-oh');
+    expect(turning.crew).toBe('Duck the boom, cross the boat');
+    expect(turning.helm).not.toContain('Lee-oh');
+  });
+
+  it('tells the crew to duck on a tack and to trim on the new side', () => {
+    const tack = new CallMachine();
+    expect(tack.step(callInput({ callDown: true })).crew).toBe('Ready');
+    const gybe = new CallMachine();
+    gybe.step(callInput({ callDown: true, twa: 2.8 }));
+    const gybing = gybe.step(callInput({ callDown: true, readyDown: true, rudder: 0.4, twa: 2.8, dt: 0.3 }));
+    expect(gybing.crew).toBe('Gybe-oh, duck, cross');
+    expect(gybing.helm).not.toContain('Gybe-oh');
+    const across = gybe.step(callInput({ callDown: true, rudder: 0.2, twa: 3.1, dt: 0.3 }));
+    expect(across.phase).toBe('window');
+    expect(across.crew).toBe('Trim for the new course');
+    expect(across.banner).toBe('Gybe-oh');
   });
 
   it('names a downwind call a gybe', () => {

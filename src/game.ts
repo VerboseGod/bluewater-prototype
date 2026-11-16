@@ -32,7 +32,7 @@ import { chaseAim } from './render/chase';
 import { TrackRibbon } from './render/ribbon';
 import { hullFloat } from './render/float';
 import { KT } from './sim/math';
-import { Simulation, type Controls, type SimSnapshot } from './sim/sim';
+import { Simulation, windwardSign, type Controls, type SimSnapshot } from './sim/sim';
 
 type CamMode = 'chase' | 'cockpit' | 'top' | 'cinema';
 type Quality = 'low' | 'high';
@@ -103,6 +103,8 @@ export class Game {
   private stick: Controls | null = null;
   private learn: LearnDirector | null = null;
   private coop: CoopSession | null = null;
+  /** Windward quarter held through a co-op tack, so the chase camera does not swing abeam. */
+  private chaseSide = 1;
   private coopOverlay: CoopOverlay;
   private overlay: LearnOverlay;
   private ribbon: TrackRibbon;
@@ -526,7 +528,7 @@ export class Game {
       look.set(s.x + fx * 14, waterY + 1.45, s.y + fz * 14);
       this.camera.up.set(0, 1, 0);
     } else if (this.camMode === 'chase' && !this.dock && !this.marina) {
-      const aim = chaseAim(s.x, s.y, s.heading, s.awa, s.twa, waterY, this.pitch);
+      const aim = chaseAim(s.x, s.y, s.heading, s.awa, s.twa, waterY, this.pitch, this.heldQuarter(s));
       dest.set(aim.x, aim.y, aim.z);
       look.set(aim.lookX, aim.lookY, aim.lookZ);
       this.camera.up.set(0, 1, 0);
@@ -537,8 +539,9 @@ export class Game {
       look.y = waterY + (this.dock ? 1.1 : 1.35);
       this.camera.up.set(0, 1, 0);
     }
-    const posK = 1 - Math.exp(-dt * (this.camMode === 'cinema' ? 1.45 : 2.8));
-    const lookK = 1 - Math.exp(-dt * (this.camMode === 'cinema' ? 2.1 : 4.4));
+    const chaseFollow = this.coop ? 9 : 2.8;
+    const posK = 1 - Math.exp(-dt * (this.camMode === 'cinema' ? 1.45 : chaseFollow));
+    const lookK = 1 - Math.exp(-dt * (this.camMode === 'cinema' ? 2.1 : this.coop ? 12 : 4.4));
     this.camPos.lerp(dest, posK);
     this.smooth.lerp(look, lookK);
     this.camera.position.copy(this.camPos);
@@ -634,6 +637,14 @@ export class Game {
     this.hud.setPaused(false);
     if (!this.coop) return;
     if (this.paused) this.coopOverlay.showReport(this.coop.report(this.sim.time));
+  }
+
+  /** Keep the chase camera on the quarter it had when the call started. */
+  private heldQuarter(s: SimSnapshot): number | undefined {
+    if (!this.coop) return undefined;
+    const live = windwardSign(s.awa, s.twa) || this.chaseSide;
+    if (this.coop.call.phase === 'idle') this.chaseSide = live;
+    return this.chaseSide || live;
   }
 
   private paintCoop(): void {
