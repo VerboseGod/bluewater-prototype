@@ -160,6 +160,12 @@ export class Simulation {
   heading: number;
   vx: number;
   vy: number;
+  /**
+   * Uniform current, world m/s. Zero in open water, so the sailing forces
+   * are unchanged. The dock scenario sets a light tide here.
+   */
+  currentX = 0;
+  currentY = 0;
   yawRate = 0;
   heel = 0;
   heelRate = 0;
@@ -243,8 +249,12 @@ export class Simulation {
     const water = sampleWater(this.x, this.y, this.time, this.waves);
     const fwd = headingFwd(this.heading);
     const stbd = headingStbd(this.heading);
-    let vFwd = this.vx * fwd.x + this.vy * fwd.y;
-    let vStbd = this.vx * stbd.x + this.vy * stbd.y;
+    // Hull and rudder see the water, not the ground. With no current this is
+    // the same ground velocity the open-water boat has always used.
+    const relVx = this.vx - this.currentX;
+    const relVy = this.vy - this.currentY;
+    let vFwd = relVx * fwd.x + relVy * fwd.y;
+    let vStbd = relVx * stbd.x + relVy * stbd.y;
     if (this.waves) {
       const orbFwd = water.orbX * fwd.x + water.orbZ * fwd.y;
       const orbStbd = water.orbX * stbd.x + water.orbZ * stbd.y;
@@ -470,6 +480,38 @@ export class Simulation {
       wind.factor,
     );
     this.prevHeading = this.heading;
+  }
+
+  /** Dock impacts call this. Open-water sailing never does. */
+  buzz(strong: number, weak: number, ms: number): void {
+    this.requestRumble(strong, weak, ms);
+  }
+
+  /**
+   * Contact and the anchor correct the pose after the sailing step.
+   * Copy that correction into the snapshot the renderer reads.
+   */
+  syncPose(): void {
+    const fwd = headingFwd(this.heading);
+    const stbd = headingStbd(this.heading);
+    const rx = this.vx - this.currentX;
+    const ry = this.vy - this.currentY;
+    const vFwd = rx * fwd.x + ry * fwd.y;
+    const vStbd = rx * stbd.x + ry * stbd.y;
+    this.snapshot = {
+      ...this.snapshot,
+      time: this.time,
+      x: this.x,
+      y: this.y,
+      heading: this.heading,
+      vx: this.vx,
+      vy: this.vy,
+      speed: Math.hypot(this.vx, this.vy),
+      vFwd,
+      vStbd,
+      leeway: Math.atan2(vStbd, vFwd),
+      yawRate: this.yawRate,
+    };
   }
 
   consumeRumble(): { strong: number; weak: number; ms: number } | null {

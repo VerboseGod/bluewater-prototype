@@ -34,6 +34,7 @@ The left stick steers the **bow** (wheel sense: stick right, bow right). The on-
 | A (hold) | Space | Move the sailor out, to windward, and hike |
 | B (hold) | B | Move the sailor in, across the boat, and slightly to leeward |
 | Y | Y | Assisted / Full manual |
+| LB, on the debrief | H | Open docking practice |
 | D-pad up / right / down | 1 / 2 / 3, C cycles | Chase / cockpit / top-down |
 | Right stick | I J K L | Orbit the chase camera (it eases back) |
 | View | R | Reset the boat. The track stays, with a gap. |
@@ -69,3 +70,25 @@ Low is the default. It is the setting meant for a mid laptop iGPU and Edge on Xb
 `?demo=1` plays a cinematic reel on High: a beam reach with way on, sheet in, a tack, a bear-away, a gybe, then the debrief. `?shot=1` holds the boat and locks the chase camera for a still. `?bench=1&quality=low` (or `high`) records frame time on `window.__BLUEWATER__.bench` after a short warm-up.
 
 The dinghy, sailor, buoys, and coastline are original procedural geometry written in this repository. There is no third-party mesh. The water is a Gerstner shader driven by the sim wind: swell, Fresnel reflection of the sky, subsurface colour, sun glint, crest and hull foam, a wake, and bow spray. Gust patches use the existing gust field and read as darker ripples. The hull and sail pick up the sky through the scene environment map.
+
+## Docking and anchoring
+
+A sheltered basin with a pontoon, a finger, and a mooring buoy. Open it from the debrief with H or LB, or the Docking practice button, or `?scenario=dock`. Adding `&demo=1` plays a scripted approach on the same boat. Y stays the assisted-mode toggle, in the harbour and in open water.
+
+Offshore is the wind off the pontoon, onshore blows you onto it, and "along" runs parallel to the face. Left bumper cycles those. Left-stick click adds a 0.3 kn tide along the pontoon. The sailing forces are the same dinghy; this only adds the tide, the contact, the line, and the anchor.
+
+Come alongside with the sail luffing. The mooring line reaches about a metre and only makes fast under half a knot. A closing speed under about 0.5 m/s is a bump the fenders take; faster is a hard hit. For the anchor, stop, drop it, and pay out scope. Under about 3:1, or dropped with way on, it drags. Around 5:1, dropped near a stop, it holds and the boat swings head-to-wind.
+
+| Xbox | Keyboard (dev) | Action |
+| --- | --- | --- |
+| Right stick click | F | Drop or weigh the anchor |
+| RB | M | Throw or let go the mooring line |
+| D-pad up | U | Pay out scope |
+| D-pad down | N | Take scope in |
+| LB | Z | Cycle the wind |
+| Left stick click | T | Light tide on / off |
+| Y | Y | Assisted / Full manual |
+| View | R | Reset the attempt |
+| Menu | P or Esc | Debrief |
+
+The debrief for an attempt shows approach speed, impact speed, distance and angle when you stopped, time, anchor scope, and whether it held, plus one plain-language tip. In this scenario D-pad up and down pay the rode. D-pad left and right, and keys 1 / 2 / 3, still move the camera. V is still the cinematic camera.

@@ -283,8 +283,10 @@ export class Ocean {
   private waves: GerstnerWave[] = [];
   private wake: WakeSample[] = [];
   private amp = 1;
+  private quality: 'low' | 'high';
 
   constructor(quality: 'low' | 'high', env: CubeTexture) {
+    this.quality = quality;
     this.segments = quality === 'high' ? 160 : 72;
     this.geometry = this.makeGeometry(this.segments);
     const physA = WAVES.map((w) => new Vector4(w.dirX, w.dirZ, w.amplitude, w.wavelength));
@@ -330,7 +332,23 @@ export class Ocean {
     this.syncWaves(Math.PI / 2, 5.66);
   }
 
+  /**
+   * Sheltered water passes 0, which also drops the short physics chop.
+   * Any other count is a Gerstner octave count.
+   */
+  setWaveCount(count: number): void {
+    this.material.uniforms.uCount.value = count;
+    this.material.uniforms.uPhys.value = count === 0 ? 0 : 4;
+    this.syncWaves(this.windFrom, this.windSpeed);
+  }
+
+  /** Flat basin, or the swell that belongs to the current quality. */
+  setSheltered(sheltered: boolean): void {
+    this.setWaveCount(sheltered ? 0 : waveCountFor(this.quality));
+  }
+
   setQuality(quality: 'low' | 'high'): void {
+    this.quality = quality;
     const segments = quality === 'high' ? 160 : 72;
     if (segments !== this.segments) {
       this.segments = segments;
