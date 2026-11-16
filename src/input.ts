@@ -89,7 +89,7 @@ export function readInput(): InputState {
   if (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w')) sheetIn = Math.max(sheetIn, 1);
   if (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s')) sheetOut = Math.max(sheetOut, 1);
   if (keys.has('Space')) hike = Math.max(hike, 1);
-  if (keys.has('KeyB')) moveIn = Math.max(moveIn, 1);
+  if (keys.has('KeyB') || keys.has('b')) moveIn = Math.max(moveIn, 1);
   if (keys.has('KeyJ')) orbitX -= 1;
   if (keys.has('KeyL')) orbitX += 1;
   if (keys.has('KeyI')) orbitY -= 1;
@@ -103,7 +103,7 @@ export function readInput(): InputState {
     moveIn,
     orbitX,
     orbitY,
-    assistPressed: assistPressed || consumeKey('KeyY'),
+    assistPressed: assistPressed || consumeKey('KeyY') || consumeKey('y'),
     resetPressed: resetPressed || consumeKey('KeyR'),
     pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('p') || consumeKey('Escape'),
     qualityPressed: qualityPressed || consumeKey('KeyG') || consumeKey('KeyX'),
