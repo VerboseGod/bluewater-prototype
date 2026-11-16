@@ -18,6 +18,7 @@ import {
   Vector3,
 } from 'three';
 import type { SimSnapshot } from '../sim/sim';
+import { sailPoint } from './sail-mesh';
 import { tillerYaw } from './tiller';
 
 const HULL = new Color('#f5f7f8');
@@ -90,11 +91,11 @@ export class DinghyView {
       this.sailGeo,
       new MeshStandardMaterial({
         map: sailCloth(),
-        color: '#f7f4ee',
-        roughness: 0.86,
+        color: '#fbf7f0',
+        roughness: 0.72,
         metalness: 0,
         side: DoubleSide,
-        envMapIntensity: 0.18,
+        envMapIntensity: 0.12,
       }),
     );
     this.sail.castShadow = true;
@@ -164,41 +165,22 @@ export class DinghyView {
 
   private shapeSail(s: SimSnapshot): void {
     const pos = this.sailGeo.getAttribute('position') as BufferAttribute;
-    const boom = s.boom;
-    const mastX = 0.95;
-    const tack = new Vector3(mastX, 0.86, 0);
-    const head = new Vector3(mastX - 0.06, 5.15, 0);
-    const foot = 2.32;
-    const clew = new Vector3(mastX - Math.cos(boom) * foot, 0.86, -Math.sin(boom) * foot);
-    const fill = s.sail === 'trimmed' ? 1 : s.sail === 'stalled' ? 0.48 : s.sail === 'aback' ? 0.12 : 0.05;
-    const camber = (0.1 + 0.34 * (1 - Math.min(1, s.sheet))) * fill;
-    const luff = s.sail === 'luffing' || s.sail === 'aback' ? 1 : s.sail === 'stalled' ? 0.4 : 0.06;
-    const side = -Math.sign(boom || s.awa || 1);
-    const chord = clew.clone().sub(tack);
-    chord.y = 0;
-    if (chord.lengthSq() > 1e-6) chord.normalize();
     let n = 0;
     for (let r = 0; r <= this.rows; r++) {
       const v = r / this.rows;
       for (let c = 0; c <= this.cols; c++) {
         const u = c / this.cols;
-        const footP = tack.clone().lerp(clew, u);
-        const p = footP.clone().lerp(head, v);
-        const draft = Math.sin(Math.PI * Math.pow(u, 0.8)) * Math.sin(Math.PI * v);
-        p.z += side * draft * camber * (0.45 + 0.55 * (1 - v * 0.65));
-        p.addScaledVector(chord, Math.sin(Math.PI * v) * u * u * 0.1);
-        const luffW = Math.exp(-u * 6.0) * (0.2 + 0.8 * v);
-        const flutter = Math.sin(s.time * 15 + v * 10 + u * 4) * 0.065 * luff * luffW;
-        const flutter2 = Math.sin(s.time * 22 + v * 16) * 0.028 * luff * luffW;
-        p.z += flutter;
-        p.x += flutter2;
+        const p = sailPoint(u, v, s.boom, s.sheet, s.sail, s.time);
         pos.setXYZ(n, p.x, p.y, p.z);
         n++;
       }
     }
     pos.needsUpdate = true;
     this.sailGeo.computeVertexNormals();
-    this.placeTelltales(s, tack, clew, head);
+    const tack = sailPoint(0, 0, s.boom, s.sheet, s.sail, s.time);
+    const clew = sailPoint(1, 0, s.boom, s.sheet, s.sail, s.time);
+    const head = sailPoint(0, 1, s.boom, s.sheet, s.sail, s.time);
+    this.placeTelltales(s, new Vector3(tack.x, tack.y, tack.z), new Vector3(clew.x, clew.y, clew.z), new Vector3(head.x, head.y, head.z));
   }
 
   private placeTelltales(s: SimSnapshot, tack: Vector3, clew: Vector3, head: Vector3): void {
