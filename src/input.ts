@@ -3,6 +3,8 @@ export interface InputState {
   sheetIn: number;
   sheetOut: number;
   hike: number;
+  /** 0..1 move the sailor in, across the boat, and slightly to leeward. */
+  moveIn: number;
   orbitX: number;
   orbitY: number;
   assistPressed: boolean;
@@ -49,6 +51,7 @@ export function readInput(): InputState {
   let sheetIn = 0;
   let sheetOut = 0;
   let hike = 0;
+  let moveIn = 0;
   let orbitX = 0;
   let orbitY = 0;
   let assistPressed = false;
@@ -66,10 +69,11 @@ export function readInput(): InputState {
     sheetOut = buttonValue(pad, 6);
     sheetIn = buttonValue(pad, 7);
     hike = buttonValue(pad, 0);
+    moveIn = buttonValue(pad, 1);
     orbitX = Math.abs(pad.axes[2] ?? 0) > dz ? pad.axes[2] : 0;
     orbitY = Math.abs(pad.axes[3] ?? 0) > dz ? pad.axes[3] : 0;
     const now = pad.buttons.map((b) => b.pressed);
-    assistPressed = edge(prevButtons[1], now[1] ?? false);
+    assistPressed = edge(prevButtons[3], now[3] ?? false);
     resetPressed = edge(prevButtons[8], now[8] ?? false);
     pausePressed = edge(prevButtons[9], now[9] ?? false);
     qualityPressed = edge(prevButtons[2], now[2] ?? false);
@@ -85,6 +89,7 @@ export function readInput(): InputState {
   if (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w')) sheetIn = Math.max(sheetIn, 1);
   if (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s')) sheetOut = Math.max(sheetOut, 1);
   if (keys.has('Space')) hike = Math.max(hike, 1);
+  if (keys.has('KeyB')) moveIn = Math.max(moveIn, 1);
   if (keys.has('KeyJ')) orbitX -= 1;
   if (keys.has('KeyL')) orbitX += 1;
   if (keys.has('KeyI')) orbitY -= 1;
@@ -95,9 +100,10 @@ export function readInput(): InputState {
     sheetIn,
     sheetOut,
     hike,
+    moveIn,
     orbitX,
     orbitY,
-    assistPressed: assistPressed || consumeKey('KeyB'),
+    assistPressed: assistPressed || consumeKey('KeyY'),
     resetPressed: resetPressed || consumeKey('KeyR'),
     pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('p') || consumeKey('Escape'),
     qualityPressed: qualityPressed || consumeKey('KeyG') || consumeKey('KeyX'),

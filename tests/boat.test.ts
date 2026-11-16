@@ -28,7 +28,8 @@ describe('dinghy behaviour', () => {
     const light = heelFor(4);
     const fresh = heelFor(8);
     expect(fresh).toBeGreaterThan(light + 4 * DEG);
-    expect(light).toBeGreaterThan(2 * DEG);
+    // A faster beam reach brings the apparent wind forward, so the boat sits a little flatter.
+    expect(light).toBeGreaterThan(1.5 * DEG);
   });
 
   it('keeps leeway in the 2–8 degree band when close-hauled', () => {

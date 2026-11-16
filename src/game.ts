@@ -16,7 +16,8 @@ import { applySkyQuality, createSky, followBoat, type SkyRig } from './render/sk
 import { Hud, hintFor } from './hud';
 import { attachKeyboard, readInput, rumble, type InputState } from './input';
 import { sampleWater } from './sim/water';
-import { Simulation, type SimSnapshot } from './sim/sim';
+import { KT } from './sim/math';
+import { Simulation, type Controls, type SimSnapshot } from './sim/sim';
 
 type CamMode = 'chase' | 'cockpit' | 'top' | 'cinema';
 type Quality = 'low' | 'high';
@@ -69,6 +70,7 @@ export class Game {
   private benchFrames = 0;
   private benchTime = 0;
   private benchDone = false;
+  private stick: Controls | null = null;
 
   constructor(root: HTMLElement) {
     this.quality = params.get('quality') === 'high' || params.has('demo') ? 'high' : 'low';
@@ -122,6 +124,28 @@ export class Game {
 
   state(): SimSnapshot {
     return this.sim.snapshot;
+  }
+
+  /** Demo and test hook. Pass null to go back to the controller. */
+  setStick(controls: Controls | null): void {
+    this.stick = controls;
+  }
+
+  place(twaDeg: number, speedKn: number, sign = 1): void {
+    this.sim.placeCourse(twaDeg, speedKn, sign);
+  }
+
+  setWindKn(kn: number): void {
+    this.sim.wind.baseSpeed = kn / KT;
+  }
+
+  setGust(factor: number): void {
+    this.sim.wind.gustFactor = factor;
+  }
+
+  /** Freeze the random wind so a scripted gust is the only puff. */
+  setSteady(steady: boolean): void {
+    this.sim.wind.steady = steady;
   }
 
   private frame(t: number): void {
@@ -188,11 +212,12 @@ export class Game {
       this.acc += dt;
       let guard = 0;
       while (this.acc >= this.step && guard < 5) {
-        this.sim.step(this.step, {
+        this.sim.step(this.step, this.stick ?? {
           rudder: input.rudder,
           sheetIn: input.sheetIn,
           sheetOut: input.sheetOut,
           hike: input.hike,
+          moveIn: input.moveIn,
         });
         const buzz = this.sim.consumeRumble();
         if (buzz) rumble(buzz.strong, buzz.weak, buzz.ms);

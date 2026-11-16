@@ -1,19 +1,26 @@
 import {
+  BEAM_DRIVE,
+  BEAM_HUMP,
   BOOM_YAW,
   CAPSIZE_ASSIST,
   CAPSIZE_MANUAL,
   CE_HEIGHT,
+  CREW_LEEWARD,
   CREW_MASS,
   CREW_OFFSET_MAX,
   CREW_OFFSET_MIN,
+  CREW_RATE,
   G,
+  HEEL_STEER,
   HULL_RIGHTING_ASSIST,
   HULL_RIGHTING_MANUAL,
   I_ROLL,
   I_YAW,
+  LIGHT_AIR,
   MASS,
   MAX_RUDDER,
-  PLANING_WIND,
+  PLANING_OFF,
+  PLANING_ONSET,
   RECOVERY_TIME,
   RHO_AIR,
   ROLL_DAMP,
@@ -27,7 +34,7 @@ import {
   WINDAGE,
 } from './constants';
 import { hullForces, rudderForces } from './hydro';
-import { headingFwd, headingStbd, passedAngle, smoothstep, wrapPi } from './math';
+import { DEG, KT, headingFwd, headingStbd, passedAngle, smoothstep, wrapPi } from './math';
 import { boomForSheet, sailForces, suggestedSheet, type SailMode } from './sail';
 import { apparentWind, WindField, type Gust, type WindSample } from './wind';
 import { sampleWater } from './water';
@@ -39,8 +46,16 @@ export interface Controls {
   sheetIn: number;
   /** 0..1 analogue, eases the sail while held. */
   sheetOut: number;
-  /** 0..1 crew hiking out to windward. */
+  /**
+   * 0..1 move the sailor out, toward a windward hike.
+   * With `moveIn` omitted, this is the legacy windward-hike fraction.
+   */
   hike: number;
+  /**
+   * 0..1 move the sailor in, through the boat, and slightly to leeward.
+   * Omit it to keep the old "hike is always on the windward side" behaviour.
+   */
+  moveIn?: number;
 }
 
 export const NEUTRAL: Controls = { rudder: 0, sheetIn: 0, sheetOut: 0, hike: 0 };
@@ -109,8 +124,26 @@ export interface SimSnapshot {
   rudderStalled: boolean;
   gust: number;
   hike: number;
+  /** Sailor offset, meters, starboard-positive. */
+  crew: number;
   boomImpact: number;
   shake: number;
+}
+
+export type SailorStation = 'hiked' | 'rail' | 'in' | 'leeward';
+
+/** Which way is windward, in starboard-positive boat axes. */
+export function windwardSign(awa: number, twa: number): number {
+  return -(Math.sign(awa) || Math.sign(twa) || 1);
+}
+
+/** Where the sailor is sitting relative to the wind. */
+export function sailorStation(crew: number, windward: number): SailorStation {
+  const along = crew * windward;
+  if (along > 0.72) return 'hiked';
+  if (along > 0.22) return 'rail';
+  if (along >= -0.12) return 'in';
+  return 'leeward';
 }
 
 /**
@@ -157,6 +190,9 @@ export class Simulation {
   private rumble: { strong: number; weak: number; ms: number } | null = null;
   private prevGust = 1;
   private hikeCmd = 0;
+  /** Persistent sailor offset once `moveIn` is used. Starboard-positive meters. */
+  crew = 0;
+  private crewManual = false;
   shake = 0;
 
   snapshot: SimSnapshot;
@@ -175,6 +211,8 @@ export class Simulation {
     this.vx = opts.vx ?? 0;
     this.vy = opts.vy ?? 0;
     this.sheet = opts.sheet ?? 0.08;
+    const twa0 = wrapPi(windFrom - this.heading);
+    this.crew = windwardSign(twa0, twa0) * CREW_OFFSET_MIN;
     this.snapshot = this.capture(NEUTRAL, 0, 0, 0, 0, 0, 'luffing', 0, 0, false);
   }
 
@@ -187,7 +225,6 @@ export class Simulation {
 
     this.time += dt;
     this.shake *= Math.exp(-dt * 3.5);
-    this.hikeCmd = clamp01(controls.hike);
     this.sheet = clamp01(this.sheet + (clamp01(controls.sheetIn) - clamp01(controls.sheetOut)) * SHEET_RATE * dt);
 
     this.wind.update(dt, this.x, this.y);
@@ -201,6 +238,7 @@ export class Simulation {
     const aws = Math.hypot(aw.x, aw.y);
     const awa = aws > 0.05 ? wrapPi(Math.atan2(-aw.y, -aw.x) - this.heading) : 0;
     const twa = wrapPi(wind.from - this.heading);
+    this.updateCrew(dt, controls, awa, twa);
 
     const water = sampleWater(this.x, this.y, this.time, this.waves);
     const fwd = headingFwd(this.heading);
@@ -228,7 +266,7 @@ export class Simulation {
     // bleeds off before the stall, instead of staying full until a cliff.
     const pinch = smoothstep(50 * (Math.PI / 180), 37 * (Math.PI / 180), twaAbsEarly);
     const sailAwa = flowAwa;
-    this.updateBoom(dt, sailAwa, flowAws);
+    this.updateBoom(dt, sailAwa, flowAws, twa);
     const stall = this.assisted ? STALL_AOA_ASSIST : STALL_AOA;
     const sail = sailForces(sailAwa, this.boom, flowAws, this.heel, stall);
     if (pinch > 0) {
@@ -250,23 +288,79 @@ export class Simulation {
     let side = sail.side + windage * (aw.x * stbd.x + aw.y * stbd.y);
 
     const twaAbs = Math.abs(twa);
-    const broad = twaAbs > 1.75 && twaAbs < 2.55;
-    if (!this.planing && broad && wind.speed >= PLANING_WIND && vFwd > 2.85 && Math.abs(this.heel) < 0.45) {
-      this.planing = true;
-    } else if (this.planing && (!broad || wind.speed < PLANING_WIND - 0.8 || vFwd < 2.35)) {
+    const windward = windwardSign(awa, twa);
+    const along = this.crew * windward;
+    const toWindward = Math.max(0, along);
+    const toLeeward = Math.max(0, -along);
+
+    // A reaching rig works harder around the beam. Close-hauled is left alone.
+    const beam = smoothstep(1.02, 1.38, twaAbs) * (1 - smoothstep(1.92, 2.28, twaAbs));
+    drive *= 1 + BEAM_DRIVE * beam;
+
+    // Light air: weight out in the breeze just adds drag. Sitting in, or a
+    // touch to leeward, keeps the boat moving.
+    const light = smoothstep(LIGHT_AIR + 0.45, LIGHT_AIR - 0.55, wind.speed);
+    if (light > 0) {
+      const hikeOut = Math.max(0, toWindward - 0.18);
+      drive -= light * hikeOut * (32 + 40 * hikeOut);
+      const inboard = smoothstep(0.5, 0.02, toWindward);
+      const lee = 1 + 0.65 * clamp(toLeeward / CREW_LEEWARD, 0, 1);
+      drive += light * inboard * lee * 18;
+    }
+
+    // Easing in a puff spills the sail before the boom has finished traveling.
+    if (clamp01(controls.sheetOut) > 0.35 && twaAbs < 1.35 && Math.abs(this.heel) > 0.22) {
+      const spill = 0.62 * clamp01(controls.sheetOut) * smoothstep(0.18, 0.36, Math.abs(this.heel));
+      drive *= 1 - spill * 0.35;
+      side *= 1 - spill;
+    }
+
+    // Still on the new leeward side once the tack has opened up: the sail stalls and the boat stays heeled.
+    if (this.crewManual && toLeeward > 0.24 && twaAbs > 0.82 && twaAbs < 1.35 && sail.mode !== 'luffing') {
+      drive *= 0.7;
+      side *= 1.08;
+    }
+
+    const bearingAway = twaAbs > 1.85 && twaAbs < 2.7;
+    const eased = this.sheet < 0.5;
+    const flat = Math.abs(this.heel) < 0.34;
+    if (!this.planing) {
+      // Onset asks for a bear-away, a flat boat, and an eased sheet.
+      if (bearingAway && eased && flat && wind.speed >= PLANING_ONSET && vFwd > 2.45) this.planing = true;
+    } else if (
+      !bearingAway ||
+      wind.speed < PLANING_OFF ||
+      vFwd < 2.05 ||
+      Math.abs(this.heel) > 0.72 ||
+      sail.mode === 'luffing' ||
+      sail.aoa < 0.06
+    ) {
+      // Apparent wind swings forward on the plane. Leave the sheet out and the sail luffs, and the plane dies.
       this.planing = false;
     }
 
-    const hydro = hullForces(vFwd, vStbd, this.heel, this.planing);
+    const tackQuality = this.tackQuality(controls, twaAbs, toWindward, toLeeward, sail.mode);
+    // A clean tack keeps a little sail drawing through the no-go instead of stalling dead.
+    if (this.crewManual && tackQuality > 0.55 && twaAbs < 0.9 && sail.mode !== 'stalled' && vFwd > 0.4) {
+      drive += 22 * tackQuality;
+    }
+    const hydro = hullForces(vFwd, vStbd, this.heel, this.planing, 1 - BEAM_HUMP * beam);
+    if (this.crewManual && tackQuality > 0.35 && vFwd > 0) {
+      // Coordinated tack: the board stays planted and the hull is not dug in.
+      hydro.fwd *= 1 - 0.75 * tackQuality;
+    }
     const rudderDelta = clamp(controls.rudder, -1, 1) * MAX_RUDDER;
     const rudderStall = this.assisted ? RUDDER_STALL_ASSIST : RUDDER_STALL;
     const rudder = rudderForces(vFwd, vStbd, rudderDelta, rudderStall);
 
-    // A turn costs speed, and a held helm on the exit meets lateral resistance
-    // instead of skating sideways once the hull's lift stalls.
-    const turnDrag = 22 * Math.abs(this.yawRate) * Math.max(0.2, vFwd);
+    // A clean tack (eased sheet, smooth helm, sailor changing sides while the
+    // sail is quiet) coasts. A harsh helm, a pinned sheet, or weight still on
+    // the wrong side scrubs the speed off.
+    const bleed = this.crewManual ? 22 * (1 - 0.82 * tackQuality) + 30 * (1 - tackQuality) * (Math.abs(controls.rudder) > 0.6 ? 1 : 0) : 22;
+    const turnDrag = bleed * Math.abs(this.yawRate) * Math.max(0.2, vFwd);
     const pinchStick = smoothstep(52 * (Math.PI / 180), 36 * (Math.PI / 180), Math.abs(twa));
-    const skidResist = (40 + 110 * Math.abs(clamp(controls.rudder, -1, 1)) + 1400 * pinchStick) * vStbd * Math.abs(vStbd);
+    let skidResist = (40 + 110 * Math.abs(clamp(controls.rudder, -1, 1)) + 1400 * pinchStick) * vStbd * Math.abs(vStbd);
+    if (this.crewManual && tackQuality > 0) skidResist *= 1 - 0.8 * tackQuality;
     const fx = drive + hydro.fwd + rudder.fwd - turnDrag;
     const fs = side + hydro.stbd + rudder.stbd - skidResist;
     this.vx += ((fx * fwd.x + fs * stbd.x) / MASS) * dt;
@@ -275,10 +369,25 @@ export class Simulation {
     const heelMoment = side * CE_HEIGHT * Math.cos(this.heel);
     const hullK = this.assisted ? HULL_RIGHTING_ASSIST : HULL_RIGHTING_MANUAL;
     const hullMoment = -hullK * Math.sin(this.heel);
-    const windward = -(Math.sign(awa) || Math.sign(twa) || 1);
-    const crewOffset = windward * (CREW_OFFSET_MIN + this.hikeCmd * (CREW_OFFSET_MAX - CREW_OFFSET_MIN));
-    const crewMoment = CREW_MASS * G * crewOffset * Math.cos(this.heel);
-    const rollAcc = (heelMoment + hullMoment + crewMoment - ROLL_DAMP * this.heelRate) / I_ROLL;
+    const crewMoment = CREW_MASS * G * this.crew * Math.cos(this.heel);
+    // Crossing before the bow is through rolls the boat onto the new leeward side.
+    let earlyRoll = 0;
+    if (this.crewManual && toLeeward > 0.26 && twaAbs > 0.42 && twaAbs < 1.2 && Math.abs(this.yawRate) > 0.18) {
+      earlyRoll = windward * (180 + 260 * toLeeward);
+    }
+    const deadRun = smoothstep(2.92, 3.12, twaAbs);
+    const overEased = smoothstep(0.09, 0.015, this.sheet);
+    const rollAmp = deadRun * overEased;
+    let death = 0;
+    let damp = ROLL_DAMP;
+    if (rollAmp > 0) {
+      // Over-eased dead run: roll damping goes negative, then a soft spring
+      // keeps the death roll from going all the way over in moderate air.
+      damp = ROLL_DAMP - 260 * rollAmp;
+      death = -Math.sin(this.heel) * 1500 * rollAmp * smoothstep(0.3, 0.58, Math.abs(this.heel));
+      death += Math.sin(this.time * 1.3) * 40 * rollAmp;
+    }
+    const rollAcc = (heelMoment + hullMoment + crewMoment + earlyRoll + death - damp * this.heelRate) / I_ROLL;
     this.heelRate += rollAcc * dt;
     this.heel += this.heelRate * dt;
 
@@ -286,11 +395,15 @@ export class Simulation {
     // A centered tiller does not let leeway steer the bow around.
     const steer = smoothstep(0.02, 0.14, helmFrac);
     let yawMoment = rudder.yaw * steer;
-    // Weather helm while the sail is powered and the boat is heeled.
-    // Flat, or with the sail luffing, the bow is not pulled around.
-    const poweredHelm = sail.mode === 'trimmed' || sail.mode === 'stalled' ? 1 : 0;
-    const heelHelm = Math.max(0, Math.abs(this.heel) - 0.1);
-    yawMoment += Math.sign(this.heel || 1) * heelHelm * WEATHER_HELM * 0.4 * poweredHelm * Math.max(0, vFwd);
+    // Heel steers. Leeward heel (and the sign convention below) rounds the
+    // boat up; windward heel bears it away. The effect fades on a reach so a
+    // flat beam reach with a centered tiller does not walk up. A gust heels
+    // the boat, so the same term is the round-up unless you hike, ease, or luff.
+    const poweredHelm = sail.mode === 'trimmed' || sail.mode === 'stalled' ? 1 : sail.aoa < 0.1 ? 0.15 : 0.4;
+    const heelHelm = Math.max(0, Math.abs(this.heel) - 0.08);
+    const upwindSteer = smoothstep(1.72, 0.82, twaAbs);
+    const steerGain = 0.22 + HEEL_STEER * upwindSteer;
+    yawMoment += Math.sign(this.heel || 1) * heelHelm * WEATHER_HELM * steerGain * poweredHelm * Math.max(0, vFwd);
     const deep = Math.min(1, Math.max(0, (Math.abs(awa) - 2.15) / 0.65));
     // A dead run is loose enough to wander into one gybe, then the extra
     // damping lets the new broad reach settle instead of spinning back.
@@ -369,6 +482,25 @@ export class Simulation {
     return this.wind.gusts;
   }
 
+  /** Put the boat on a close-hauled or reaching heading with way on. Used by the feel demo. */
+  placeCourse(twaDeg: number, speedKn: number, sign = 1): void {
+    this.heading = wrapPi(this.wind.baseFrom - sign * twaDeg * DEG);
+    this.prevHeading = this.heading;
+    const v = speedKn / KT;
+    this.vx = Math.cos(this.heading) * v;
+    this.vy = Math.sin(this.heading) * v;
+    this.yawRate = 0;
+    this.heel = 0;
+    this.heelRate = 0;
+    this.capsized = false;
+    this.planing = false;
+    const windward = windwardSign(sign, sign);
+    this.crew = windward * 0.7;
+    this.sheet = twaDeg < 70 ? 0.9 : 0.35;
+    this.boom = Math.sign(sign || 1) * Math.min(1.1, Math.max(0.2, twaDeg * DEG - 0.45));
+    this.boomRate = 0;
+  }
+
   resetBoat(): void {
     const from = this.wind.baseFrom;
     this.x = 0;
@@ -381,6 +513,8 @@ export class Simulation {
     this.heel = 0;
     this.heelRate = 0;
     this.sheet = 0.08;
+    this.crew = windwardSign(wrapPi(from - this.heading), 0) * CREW_OFFSET_MIN;
+    this.crewManual = false;
     this.boom = 0;
     this.boomRate = 0;
     this.planing = false;
@@ -423,11 +557,16 @@ export class Simulation {
     };
   }
 
-  private updateBoom(dt: number, awa: number, aws: number): void {
+  private updateBoom(dt: number, awa: number, aws: number, twa: number): void {
     const limit = boomForSheet(this.sheet);
     const sign = Math.abs(awa) > 0.08 ? Math.sign(awa) : Math.sign(this.boom) || 1;
     const target = sign * Math.min(Math.abs(awa), limit);
     const err = target - this.boom;
+    const boomSign = Math.sign(this.boom);
+    // By the lee the true wind is already on the boom's old side. The boom comes across on its own.
+    if (boomSign !== 0 && Math.abs(twa) > 2.97 && Math.sign(twa) !== boomSign) {
+      this.boomRate -= boomSign * (6 + aws * 0.9);
+    }
     const q = aws * aws;
     const acc = err * (7 + q * 0.22) - this.boomRate * (3.2 + q * 0.04);
     this.boomRate = clamp(this.boomRate + acc * dt, -14, 14);
@@ -438,6 +577,13 @@ export class Simulation {
       if (this.wind.baseSpeed >= 8.2 && this.sheet < 0.4 && this.hikeCmd < 0.2) {
         this.heel += Math.sign(this.boom) * 1.35;
         this.heelRate += Math.sign(this.boom) * 0.7;
+      }
+      // Late across the boat: weight is still on the new leeward side and the roll can carry through to windward.
+      const windward = windwardSign(awa, twa);
+      const late = this.crew * windward < -0.12;
+      if (late && this.wind.baseSpeed >= 7.7 && this.sheet < 0.45) {
+        this.heel += windward * 1.05;
+        this.heelRate += windward * 1.5;
       }
     }
     if (Math.abs(this.boom) > 0.02) this.prevBoomSign = Math.sign(this.boom);
@@ -552,9 +698,47 @@ export class Simulation {
       rudderStalled,
       gust,
       hike: this.hikeCmd,
+      crew: this.crew,
       boomImpact: this.shake,
       shake: this.shake,
     };
+  }
+
+  /**
+   * A moves the sailor out to a windward hike. B moves them in and, held,
+   * through onto the leeward side. Omit `moveIn` and hike stays a windward
+   * fraction, which is what the older settled-boat tests drive.
+   */
+  private updateCrew(dt: number, controls: Controls, awa: number, twa: number): void {
+    const windward = windwardSign(awa, twa);
+    if (controls.moveIn === undefined) {
+      this.crewManual = false;
+      this.hikeCmd = clamp01(controls.hike);
+      this.crew = windward * (CREW_OFFSET_MIN + this.hikeCmd * (CREW_OFFSET_MAX - CREW_OFFSET_MIN));
+      return;
+    }
+    this.crewManual = true;
+    const hike = clamp01(controls.hike);
+    const inn = clamp01(controls.moveIn);
+    this.hikeCmd = hike;
+    const outTarget = windward * CREW_OFFSET_MAX;
+    const inTarget = -windward * CREW_LEEWARD;
+    let delta = 0;
+    if (hike > 0) delta += Math.sign(outTarget - this.crew || windward) * hike;
+    if (inn > 0) delta += Math.sign(inTarget - this.crew || -windward) * inn;
+    this.crew = clamp(this.crew + delta * CREW_RATE * dt, -CREW_OFFSET_MAX, CREW_OFFSET_MAX);
+  }
+
+  /** 1 when a tack is being sailed cleanly, 0 when it is being forced. Legacy tests stay at 0. */
+  private tackQuality(controls: Controls, twaAbs: number, toWindward: number, toLeeward: number, mode: SailMode): number {
+    if (!this.crewManual || twaAbs > 1.15 || Math.abs(this.yawRate) < 0.1) return 0;
+    const ease = clamp((0.95 - this.sheet) / 0.5, 0, 1);
+    const smooth = clamp((0.48 - Math.abs(controls.rudder)) / 0.32, 0, 1);
+    if (Math.abs(controls.rudder) > 0.62) return 0;
+    // Coming off the rail counts as soon as the turn starts; sitting out to leeward early does not.
+    const inboard = toLeeward > 0.32 && twaAbs > 0.65 ? 0 : clamp((0.55 - toWindward) / 0.4, 0, 1);
+    const late = toLeeward > 0.3 && mode !== 'luffing' && twaAbs > 0.9 ? 1 : 0;
+    return clamp(smooth * (1 - late) * Math.max(ease * 0.35, inboard), 0, 1);
   }
 
   private requestRumble(strong: number, weak: number, ms: number): void {

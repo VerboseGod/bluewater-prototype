@@ -149,11 +149,16 @@ export class DinghyView {
       if (d < -Math.PI) d += Math.PI * 2;
       windex.rotation.y += d * 0.12;
     }
-    const windward = Math.sign(s.awa || s.twa || 1) || 1;
-    const hike = s.hike;
-    this.sailor.position.set(-0.15, 0.42, windward * (0.06 + hike * 0.82));
-    this.sailor.rotation.z = -windward * hike * 0.95;
-    this.torso.rotation.z = -windward * hike * 0.28;
+    // Crew is starboard-positive. Mesh +z is the positive-awa side, so the pose flips it.
+    // Out on the rail the torso hikes; sitting in or to leeward stays nearer the cockpit.
+    const meshZ = -s.crew;
+    const mag = Math.abs(meshZ);
+    const side = Math.sign(meshZ || 1);
+    const hikeAmt = Math.max(0, Math.min(1, (mag - 0.18) / 0.84));
+    this.sailor.position.set(-0.15, 0.42, side * mag * (0.88 / 1.02));
+    this.sailor.rotation.x = 0;
+    this.sailor.rotation.z = -side * hikeAmt * 0.95;
+    this.torso.rotation.z = -side * hikeAmt * 0.28;
     this.sailor.visible = !s.capsized;
   }
 

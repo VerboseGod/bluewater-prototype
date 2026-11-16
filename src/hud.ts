@@ -1,5 +1,5 @@
 import { KT, RAD } from './sim/math';
-import type { ManeuverMark, Simulation, TrackPoint } from './sim/sim';
+import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from './sim/sim';
 
 export class Hud {
   readonly root: HTMLElement;
@@ -19,6 +19,8 @@ export class Hud {
   private sheetWord: HTMLElement;
   private heelFill: HTMLElement;
   private heelWord: HTMLElement;
+  private sailorFill: HTMLElement;
+  private sailorWord: HTMLElement;
   private link: HTMLElement;
   private debrief: HTMLElement;
   private trackCanvas: HTMLCanvasElement;
@@ -65,9 +67,12 @@ export class Hud {
             <div>Heel</div>
             <div class="bar"><i id="heelfill"></i></div>
             <div class="state-word" id="heelword">Flat</div>
+            <div>Sailor <span class="muted">A out · B in</span></div>
+            <div class="bar"><i id="sailorfill"></i></div>
+            <div class="state-word" id="sailorword">Windward rail</div>
           </div>
         </div>
-        <div class="legend">Stick steers the bow · triggers sheet · A hike · B aids · V cinematic · View reset · Menu debrief · X low/high</div>
+        <div class="legend">Stick steers the bow · triggers sheet · A out/hike · B in/across · Y assisted · V cinematic · View reset · Menu debrief · X low/high</div>
       </div>
       <div class="debrief hidden" id="debrief">
         <div class="card">
@@ -99,6 +104,8 @@ export class Hud {
     this.sheetWord = parent.querySelector('#sheetword')!;
     this.heelFill = parent.querySelector('#heelfill')!;
     this.heelWord = parent.querySelector('#heelword')!;
+    this.sailorFill = parent.querySelector('#sailorfill')!;
+    this.sailorWord = parent.querySelector('#sailorword')!;
     this.link = parent.querySelector('#link')!;
     this.debrief = parent.querySelector('#debrief')!;
     this.trackCanvas = parent.querySelector('#track')!;
@@ -149,6 +156,15 @@ export class Hud {
     this.heelWord.textContent = s.capsized
       ? 'Capsized — righting'
       : `${heelDeg.toFixed(0)}° ${Math.abs(heelDeg) < 3 ? 'flat' : heelDeg > 0 ? 'starboard down' : 'port down'}`;
+    const windward = windwardSign(s.awa, s.twa);
+    const station = sailorStation(s.crew, windward);
+    const stationWord =
+      station === 'hiked' ? 'Hiked out' : station === 'rail' ? 'Windward rail' : station === 'in' ? 'Sitting in' : 'To leeward';
+    this.sailorWord.textContent = stationWord;
+    this.sailorWord.className = `state-word ${station === 'leeward' ? 'luffing' : 'trimmed'}`;
+    const along = s.crew * windward;
+    const sailorPct = Math.max(0, Math.min(100, ((along + 0.45) / 1.5) * 100));
+    this.sailorFill.style.width = `${sailorPct}%`;
     this.hint.textContent = hint;
     this.hint.classList.toggle('urgent', urgent);
     this.hint.style.visibility = hint ? 'visible' : 'hidden';
@@ -227,9 +243,18 @@ export class Hud {
       .join('');
     const note = this.root.querySelector('#debriefnote')!;
     note.textContent = sim.assisted
-      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red arc is an approximate no-go guide. The boat can still sail wherever the forces allow. X or G switches Low and High graphics.'
-      : 'Full manual: no sheet coach and no no-go wedge. Capsize and stall are less forgiving. Menu resumes.';
+      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red arc is an approximate no-go guide. In a tack or gybe it tells you when to change sides. The boat can still sail wherever the forces allow. X or G switches Low and High graphics.'
+      : 'Full manual: no sheet coach, no no-go arc, and no side-change prompt. You still have to cross the boat. Capsize and stall are less forgiving. Menu resumes.';
   }
+}
+
+function sideChangeDue(s: { assisted: boolean; awa: number; twa: number; crew: number; vFwd: number; boom: number }): boolean {
+  if (!s.assisted) return false;
+  const windward = windwardSign(s.awa, s.twa);
+  const onWindward = s.crew * windward > 0.2;
+  const tacking = Math.abs(s.twa) < 0.45 && s.vFwd > 0.45;
+  const gybing = Math.abs(s.twa) > 2.9 && Math.abs(s.boom) > 0.3 && s.vFwd > 0.4;
+  return (tacking || gybing) && !onWindward;
 }
 
 function boundsOf(pts: TrackPoint[], x: number, y: number): { minX: number; minY: number; span: number } {
@@ -258,11 +283,21 @@ export function hintFor(sim: Simulation): { text: string; urgent: boolean } {
   if (s.inIrons) {
     return { text: 'In irons — you are drifting backwards. Push the stick the other way. Reverse rudder will push the bow off the wind, then sheet in.', urgent: true };
   }
+  if (sim.assisted && sideChangeDue(s)) {
+    return {
+      text: 'Change sides now. B moves you in across the boat, then A hikes you out. Too early heels the boat onto the new leeward and slows you; too late and you heel and stall.',
+      urgent: true,
+    };
+  }
+  if (s.planing && s.aoa < 0.14) {
+    return { text: 'Planing — the apparent wind has come forward. Sheet in, or the sail luffs and the boat drops off the plane.', urgent: true };
+  }
   if (s.sail === 'stalled' && s.speed > 0.5) {
     return { text: 'The sail is stalled — sheeted too tight. Ease with the left trigger until the telltales stream aft.', urgent: true };
   }
-  if (Math.abs(s.heel) > 0.35 && s.hike < 0.35 && !s.capsized) {
-    return { text: 'Hold A to hike out. Past about 15° of heel you slow down and the boat wants to round up.', urgent: true };
+  const hiked = s.crew * windwardSign(s.awa, s.twa) > 0.6;
+  if (Math.abs(s.heel) > 0.32 && !hiked && !s.capsized && Math.abs(s.twa) < 1.3) {
+    return { text: 'Gust or a puff will round you up. Hold A to hike, ease the sheet, or feather up until the sail luffs.', urgent: true };
   }
   if (s.sheet < 0.22 && s.sail === 'luffing' && s.speed < 1.2) {
     return { text: 'Pull the right trigger to sheet in until the sail fills and the telltales stream back.', urgent: false };
@@ -272,7 +307,7 @@ export function hintFor(sim: Simulation): { text: string; urgent: boolean } {
   }
   const tacks = sim.marks.filter((m: ManeuverMark) => m.type === 'tack').length;
   if (tacks === 0 && s.speed > 1.2 && sim.time < 600) {
-    return { text: 'You are sailing. Try a tack: ease your hike as the sail luffs, and steer smoothly through the wind.', urgent: false };
+    return { text: 'You are sailing. Try a tack: ease the sheet, steer smoothly, and cross the boat as the sail luffs. A hikes out, B moves you in.', urgent: false };
   }
   if (sim.time < 30) {
     return { text: 'Wind streams across the water and the masthead vane points into the apparent wind. Menu opens the debrief.', urgent: false };

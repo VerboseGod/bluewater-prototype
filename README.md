@@ -31,8 +31,9 @@ The left stick steers the **bow** (wheel sense: stick right, bow right). The on-
 | Left stick X | A / D or Left / Right | Steer the bow |
 | Right trigger | W or Up | Sheet in |
 | Left trigger | S or Down | Sheet out |
-| A (hold) | Space | Hike out |
-| B | B | Assisted / Full manual |
+| A (hold) | Space | Move the sailor out, to windward, and hike |
+| B (hold) | B | Move the sailor in, across the boat, and slightly to leeward |
+| Y | Y | Assisted / Full manual |
 | D-pad up / right / down | 1 / 2 / 3, C cycles | Chase / cockpit / top-down |
 | Right stick | I J K L | Orbit the chase camera (it eases back) |
 | View | R | Reset the boat. The track stays, with a gap. |
@@ -40,17 +41,24 @@ The left stick steers the **bow** (wheel sense: stick right, bow right). The on-
 | X | G | Graphics quality, Low / High |
 | — | V or 4 | Cinematic camera |
 
-**Assisted** draws an approximate no-go arc and an amber mark on the sheet bar. **Full manual** hides both.
+**Assisted** draws an approximate no-go arc, an amber mark on the sheet bar, and a prompt to change sides in a tack or gybe. **Full manual** hides all three. The sailor still has to cross the boat either way.
+
+The sailor's lateral position is a real control, not a pose. A moves them out toward whichever side is windward and, held, hikes them. B moves them in through the cockpit and, held, onto the leeward side. In a tack or gybe they have to change sides. Crossing while the old sail is still powered heels the boat onto the new leeward side and slows it. Staying on the old rail heels and stalls the exit, and a late gybe can carry the roll through to a windward capsize. Below 6 kn true, sitting in or a little to leeward is faster than hiking.
 
 ## Feel, in 11 kn of true wind
 
 Settled with a decent sheet:
 
 - Inside about 35° the boat stops and the sail is luffing. Between about 38° and 45° it pinches: speed falls off and the windward telltales lift before the stall.
-- Best VMG is around 42–45°, near 4.5 kn. By 50° you are a little faster, but VMG is worse.
-- A tack with way on takes about 3–6 seconds and bleeds speed. Holding the helm on the exit does not skid the boat sideways.
-- A flat, trimmed reach with the tiller centered does not keep walking up. A run after a gybe settles.
+- Close-hauled at 45° is about 4.7 kn and at 50° about 4.9 kn. Best VMG stays around 42–45°.
+- A beam reach is about 5.9 kn. The displacement hump is softer on that heading, which is what lets the boat sit near 6 kn.
+- A good tack (smooth helm, sheet eased through the wind, sailor across as the sail goes light) keeps about 60% of entry speed, roughly 4.9 kn down to 3.0 kn, and takes about 4–5 seconds. A rushed helm with the sheet pinned and the sailor left on the old rail keeps about a third of that speed.
+- Heel steers. Leeward heel rounds the boat up; windward heel bears it away. A gust upwind does the same unless you hike, ease, or feather. A flat reach with the tiller centered does not walk up.
+- Planing starts near 14 kn true on a broad reach, with the sheet eased and the boat flat, and it stays on down to about 11 kn. Bearing away into a gust on an 11 kn day is enough to pop it. Once the boat is up, the apparent wind comes forward and the sheet has to come in or the sail luffs and the plane dies.
+- A dead run with the sheet over-eased rolls. Sailing by the lee gybes the boom without a helm movement.
 - In 16 kn or more, a gybe with the sheet eased and no hike can capsize.
+
+Telltales still follow angle of attack: the windward one lifts when the sail is starved, the leeward one when it is stalled.
 
 Menu opens the debrief: track, tacks, gybes, and the session stats.
 
