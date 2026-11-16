@@ -14,6 +14,16 @@ import { DT } from './support';
 const WALL: ShadowWall = { x1: 0, y1: -15, x2: 0, y2: 15, height: 8 };
 const FROM_WEST = Math.PI;
 
+describe('berth wind', () => {
+  it('is a breeze at the berth, not dead air', () => {
+    const session = new HarbourSession();
+    session.step(1 / 60, emptyInput());
+    expect(session.sim.snapshot.tws).toBeGreaterThan(3);
+    expect(session.sim.snapshot.aws).toBeGreaterThan(2);
+    expect(session.shadowFactor).toBeGreaterThan(0.7);
+  });
+});
+
 describe('herzliya extract', () => {
   it('parses breakwater segments and seamarks', () => {
     expect(herzliya.extract.breakwaters.length).toBe(5);

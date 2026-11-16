@@ -12,7 +12,8 @@ import { DemoDirector } from './render/demo';
 import { BowSpray, Wake, WindCues } from './render/effects';
 import { Ocean } from './render/ocean';
 import { Marks, makeCoast } from './render/scenery';
-import { applySkyQuality, applyTimeOfDay, createSky, followBoat, type SkyRig } from './render/sky';
+import { applySkyQuality, applyTimeOfDay, createSky, followBoat, setShadowStage, type SkyRig, type TimeOfDay } from './render/sky';
+import { wrapPi } from './sim/math';
 import { DockSession } from './dock/session';
 import type { DockReport } from './dock/score';
 import { HarbourSession, type HarbourReport } from './harbour/session';
@@ -55,6 +56,10 @@ export class Game {
   private coast: ReturnType<typeof makeCoast>;
   private pace = 1;
   private overview = false;
+  private shot = '';
+  private reel = false;
+  private reelT = 0;
+  private reelHeading = -0.4;
   private hud: Hud;
   private renderer: WebGLRenderer;
   private scene = new Scene();
@@ -96,7 +101,10 @@ export class Game {
     this.quality = params.get('quality') === 'high' || params.has('demo') ? 'high' : 'low';
     this.demo = params.has('demo') && !dockQuery && !harbourQuery ? new DemoDirector() : null;
     this.pace = harbourQuery ? Math.max(1, Math.min(16, Number(params.get('pace')) || 1)) : 1;
-    this.overview = harbourQuery && params.get('shot') === 'overview';
+    const shot = params.get('shot');
+    this.overview = harbourQuery && (shot === 'overview' || shot === 'entrance' || shot === 'berth');
+    this.shot = shot === 'berth' || shot === 'entrance' || shot === 'overview' ? shot : '';
+    this.reel = harbourQuery && params.has('reel');
     this.capture = params.has('capture');
     this.bench = params.has('bench');
     this.lockShot = params.has('shot') && !harbourQuery;
@@ -138,12 +146,14 @@ export class Game {
     };
     this.hud.onToggleDock = () => this.toggleScenario();
     this.hud.onToggleHarbour = () => this.toggleHarbour();
+    this.hud.onPlace = (place) => this.goPlace(place);
+    this.hud.onTime = (mode) => this.setTime(mode);
     attachKeyboard(window);
     window.addEventListener('resize', () => this.resize());
     this.resize();
     const query = new URLSearchParams(window.location.search);
     if (query.get('scenario') === 'dock') this.enterDock(query.get('demo') === '1');
-    if (harbourQuery) this.enterHarbour(params.has('demo'));
+    if (harbourQuery) this.enterHarbour(params.has('demo') && !this.reel);
   }
 
   start(): void {
@@ -191,7 +201,8 @@ export class Game {
 
   private frame(t: number): void {
     const raw = this.last ? (t - this.last) / 1000 : this.step;
-    const real = Math.min(this.pace > 1 ? 0.12 : 0.05, raw);
+    const real = Math.min(this.reel ? 0.3 : this.pace > 1 ? 0.12 : 0.05, raw);
+    if (this.reel && !this.paused) this.reelT += Math.min(0.3, raw);
     const dt = this.capture ? 1 / 30 : real;
     this.last = t;
     if (!this.capture) this.fps += (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
@@ -264,9 +275,10 @@ export class Game {
     if (!this.paused) {
       this.acc += dt * this.pace;
       let guard = 0;
-      const guardMax = this.pace > 1 ? 90 : 5;
+      const guardMax = this.pace > 1 ? 90 : this.reel ? 24 : 5;
       while (this.acc >= this.step && guard < guardMax) {
-        const frameInput = this.stick ? { ...input, ...this.stick } : input;
+        let frameInput = this.stick ? { ...input, ...this.stick } : input;
+        if (this.reel && this.marina && !this.stick) frameInput = reelStick(frameInput, this.sim.heading, this.reelHeading, this.reelT, this.sim.snapshot.speed);
         if (this.marina) this.marina.step(this.step, frameInput);
         else if (this.dock) this.dock.step(this.step, frameInput);
         else {
@@ -329,17 +341,24 @@ export class Game {
     this.spray.update(dt, s.x, s.y, s.heading, s.speed, pose.y, this.camera.position, this.paused, impact);
     this.marks.update(time, (x, z) => this.ocean.heightAt(x, z, time));
     this.sky.sky.material.uniforms.time.value = time;
-    followBoat(this.sky, s.x, s.y);
+    followBoat(this.sky, s.x, s.y, this.marina ? 130 : 36);
     this.placeCamera(s, pose.y, dt);
     this.renderer.render(this.scene, this.camera);
   }
 
   private placeCamera(s: SimSnapshot, waterY: number, dt: number): void {
-    if (this.overview && this.marina) {
-      const c = this.marina.world.course;
+    if (this.reel && this.marina && !this.overview) {
       this.camera.up.set(0, 1, 0);
-      this.camera.position.set(c.gate.x + 24, 16, c.gate.y - 18);
-      this.camera.lookAt(c.gate.x - 12, 1.4, c.gate.y + 22);
+      const frame = this.reelT < 32 ? berthFrame(this.sim) : entranceFrame(this.marina);
+      this.camera.position.set(frame.px, frame.py, frame.pz);
+      this.camera.lookAt(frame.lx, frame.ly, frame.lz);
+      return;
+    }
+    if (this.overview && this.marina) {
+      this.camera.up.set(0, 1, 0);
+      const frame = this.shot === 'entrance' || this.shot === 'overview' ? entranceFrame(this.marina) : berthFrame(this.sim);
+      this.camera.position.set(frame.px, frame.py, frame.pz);
+      this.camera.lookAt(frame.lx, frame.ly, frame.lz);
       return;
     }
     if (this.lockShot) {
@@ -421,6 +440,7 @@ export class Game {
     this.cues.setQuality(this.quality);
     this.spray.setQuality(this.quality);
     applySkyQuality(this.renderer, this.sky, this.quality);
+    if (this.marina) setShadowStage(this.sky, 'harbour', this.quality === 'high');
     this.boat.setContactShadow(true);
     this.renderer.setPixelRatio(this.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 1.25) : 1);
     this.resize();
@@ -477,13 +497,20 @@ export class Game {
     this.coast.visible = false;
     this.marks.group.visible = false;
     this.ocean.setHarbour(true, this.marina.world.basin);
-    this.sky.fog.density = 0.0014;
-    applyTimeOfDay(this.sky, 'golden');
-    this.ocean.setSun(this.sky.sunDir, this.sky.horizon);
+    this.sky.fog.density = 0.00115;
+    this.setTime('golden');
+    setShadowStage(this.sky, 'harbour', this.quality === 'high');
     setPadLayout('dock');
     this.hud.setScenario('harbour');
     this.pitch = 0.35;
-    this.camPos.set(this.sim.x - 16, 8, this.sim.y - 8);
+    const home = berthFrame(this.sim);
+    this.camPos.set(home.px, home.py, home.pz);
+    this.smooth.set(home.lx, home.ly, home.lz);
+    this.marina.step(1 / 60, blankInput());
+    if (this.reel) {
+      const course = this.marina.world.course;
+      this.reelHeading = Math.atan2(course.cleat.y - course.start.y, course.cleat.x - course.start.x);
+    }
     if (this.overview) this.paused = true;
   }
 
@@ -498,11 +525,26 @@ export class Game {
     this.marks.group.visible = true;
     this.ocean.setSheltered(false);
     this.sky.fog.density = 0.0085;
-    applyTimeOfDay(this.sky, 'day');
-    this.ocean.setSun(this.sky.sunDir, this.sky.horizon);
+    this.setTime('day');
+    setShadowStage(this.sky, 'boat', this.quality === 'high');
     setPadLayout('sail');
     this.hud.setScenario('open');
     this.hud.setStrip(null);
+  }
+
+  private setTime(mode: TimeOfDay): void {
+    applyTimeOfDay(this.sky, mode);
+    this.renderer.toneMappingExposure = mode === 'day' ? 0.84 : mode === 'dusk' ? 1.05 : 1.35;
+    this.ocean.setSun(this.sky.sunDir, this.sky.horizon);
+    this.hud.setTime(mode);
+  }
+
+  private goPlace(place: 'open' | 'dock' | 'harbour'): void {
+    if (place === 'open') this.enterOpen();
+    else if (place === 'dock') this.enterDock(false);
+    else this.enterHarbour(false);
+    this.paused = false;
+    this.hud.setPaused(false);
   }
 
   private resize(): void {
@@ -512,4 +554,55 @@ export class Game {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
   }
+}
+
+/** South of the dinghy, looking north across the berth into the marina. */
+function blankInput(): InputState {
+  return {
+    rudder: 0,
+    sheetIn: 0,
+    sheetOut: 0,
+    hike: 0,
+    moveIn: 0,
+    orbitX: 0,
+    orbitY: 0,
+    assistPressed: false,
+    resetPressed: false,
+    pausePressed: false,
+    qualityPressed: false,
+    camera: null,
+    cycleCamera: false,
+    usingGamepad: false,
+    dockPressed: false,
+    anchorPressed: false,
+    moorPressed: false,
+    scopeOut: false,
+    scopeIn: false,
+    windPressed: false,
+    tidePressed: false,
+  };
+}
+
+function reelStick(input: InputState, heading: number, target: number, reelT: number, speed: number): InputState {
+  const err = wrapPi(target - heading);
+  const sail = reelT < 34;
+  return {
+    ...input,
+    rudder: Math.max(-0.5, Math.min(0.5, -err * 1.4)),
+    sheetIn: sail ? 1 : 0,
+    sheetOut: sail ? 0 : 1,
+    hike: 0.15,
+    moveIn: 0,
+    paddle: sail && speed < 0.7,
+  };
+}
+
+export function berthFrame(sim: { x: number; y: number }): { px: number; py: number; pz: number; lx: number; ly: number; lz: number } {
+  return { px: sim.x + 16, py: 6.4, pz: sim.y - 13, lx: sim.x - 1.5, ly: 1.35, lz: sim.y + 3 };
+}
+
+/** Just outside the entrance, looking in past the breakwater lights. */
+export function entranceFrame(session: HarbourSession): { px: number; py: number; pz: number; lx: number; ly: number; lz: number } {
+  const g = session.world.course.gate;
+  return { px: g.x - 26, py: 9.5, pz: g.y + 18, lx: g.x + 22, ly: 2.2, lz: g.y - 14 };
 }

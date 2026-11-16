@@ -1,6 +1,7 @@
 import {
   BackSide,
   Color,
+  OrthographicCamera,
   CubeCamera,
   CubeTexture,
   DirectionalLight,
@@ -179,10 +180,12 @@ function gradientSky(sunDir: Vector3): Mesh {
   return mesh;
 }
 
-/** Day is the open-water sun. Golden is a low western sun for the harbour. */
-export function applyTimeOfDay(rig: SkyRig, mode: 'day' | 'golden'): void {
-  const elev = (mode === 'golden' ? 8 : 32) * (Math.PI / 180);
-  const az = mode === 'golden' ? Math.PI - 0.35 : 0.62;
+export type TimeOfDay = 'day' | 'golden' | 'dusk';
+
+/** Day is the open-water sun. Golden and dusk are a low western sun over the marina. */
+export function applyTimeOfDay(rig: SkyRig, mode: TimeOfDay): void {
+  const elev = (mode === 'dusk' ? 3.2 : mode === 'golden' ? 6.2 : 32) * (Math.PI / 180);
+  const az = mode === 'day' ? 0.62 : Math.PI - 0.55;
   rig.sunDir
     .set(Math.cos(elev) * Math.cos(az), Math.sin(elev), -Math.cos(elev) * Math.sin(az))
     .normalize();
@@ -190,16 +193,16 @@ export function applyTimeOfDay(rig: SkyRig, mode: 'day' | 'golden'): void {
   const cheapSun = (rig.cheap.material as ShaderMaterial).uniforms.uSun.value as Vector3;
   cheapSun.copy(rig.sunDir);
   const u = rig.sky.material.uniforms;
-  if (mode === 'golden') {
-    u.turbidity.value = 8;
-    u.rayleigh.value = 3.1;
-    u.mieCoefficient.value = 0.018;
-    rig.horizon.set('#e7a56a');
-    rig.sun.color.set('#ffb07a');
-    rig.sun.intensity = 2.4;
-    rig.hemi.color.set('#ffd0a8');
-    rig.hemi.groundColor.set('#2a3330');
-    rig.hemi.intensity = 0.38;
+  if (mode === 'golden' || mode === 'dusk') {
+    u.turbidity.value = mode === 'dusk' ? 10 : 7.2;
+    u.rayleigh.value = mode === 'dusk' ? 3.4 : 2.6;
+    u.mieCoefficient.value = mode === 'dusk' ? 0.02 : 0.012;
+    rig.horizon.set(mode === 'dusk' ? '#c46a4a' : '#f0a15a');
+    rig.sun.color.set(mode === 'dusk' ? '#ff7a3c' : '#ff9a45');
+    rig.sun.intensity = mode === 'dusk' ? 1.7 : 3.4;
+    rig.hemi.color.set(mode === 'dusk' ? '#c98a68' : '#ffd0a4');
+    rig.hemi.groundColor.set('#2a2824');
+    rig.hemi.intensity = mode === 'dusk' ? 0.22 : 0.28;
   } else {
     u.turbidity.value = 2.1;
     u.rayleigh.value = 2.4;
@@ -214,11 +217,28 @@ export function applyTimeOfDay(rig: SkyRig, mode: 'day' | 'golden'): void {
   rig.fog.color.copy(rig.horizon);
 }
 
-export function followBoat(rig: SkyRig, x: number, z: number): void {
+/** Boat-sized shadow in open water. The harbour needs the mole and the town in the map. */
+export function setShadowStage(rig: SkyRig, stage: 'boat' | 'harbour', high: boolean): void {
+  const cam = rig.sun.shadow.camera as OrthographicCamera;
+  const extent = stage === 'harbour' ? 78 : 14;
+  cam.left = -extent;
+  cam.right = extent;
+  cam.top = extent;
+  cam.bottom = -extent;
+  cam.near = stage === 'harbour' ? 0.5 : 2;
+  cam.far = stage === 'harbour' ? 340 : 80;
+  cam.updateProjectionMatrix();
+  const size = stage === 'harbour' && high ? 2048 : high ? 1024 : 512;
+  rig.sun.shadow.mapSize.set(size, size);
+  rig.sun.shadow.map?.dispose();
+  rig.sun.shadow.map = null;
+}
+
+export function followBoat(rig: SkyRig, x: number, z: number, distance = 36): void {
   rig.sun.position.set(
-    x + rig.sunDir.x * 36,
-    rig.sunDir.y * 36,
-    z + rig.sunDir.z * 36,
+    x + rig.sunDir.x * distance,
+    Math.max(6, rig.sunDir.y * distance),
+    z + rig.sunDir.z * distance,
   );
   rig.sun.target.position.set(x, 0, z);
   rig.sun.target.updateMatrixWorld();
