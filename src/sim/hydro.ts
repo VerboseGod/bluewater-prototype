@@ -31,6 +31,7 @@ export function hullForces(
   vStbd: number,
   heel: number,
   planing: boolean,
+  humpScale = 1,
 ): HydroForce {
   const v = Math.hypot(vFwd, vStbd);
   if (v < 0.04) return { fwd: 0, stbd: 0 };
@@ -40,7 +41,7 @@ export function hullForces(
 
   const froude = Math.abs(vFwd) / Math.sqrt(G * WATERLINE);
   const hump = Math.exp(-((froude - 0.5) ** 2) / (2 * 0.055 * 0.055));
-  let drag = HULL_DRAG_LIN * v + HULL_DRAG_QUAD * v * v + HULL_HUMP * v * v * hump;
+  let drag = HULL_DRAG_LIN * v + HULL_DRAG_QUAD * v * v + HULL_HUMP * v * v * hump * humpScale;
   const heelAbs = Math.abs(heel);
   if (heelAbs > 0.19) {
     drag *= 1 + ((heelAbs - 0.19) / 0.32) ** 2;

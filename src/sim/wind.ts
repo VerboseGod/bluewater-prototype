@@ -29,6 +29,8 @@ export class WindField {
   baseFrom: number;
   steady: boolean;
   gusts: Gust[] = [];
+  /** Extra multiplier applied even when the field is steady. 1 = none. */
+  gustFactor = 1;
   private nextSpawn = 2.5;
   private rng: () => number;
 
@@ -99,6 +101,7 @@ export class WindField {
         }
       }
     }
+    factor *= this.gustFactor;
     speed *= factor;
     const vel = this.flow(from, speed);
     return { vel, speed, from: wrapPi(from), factor };
