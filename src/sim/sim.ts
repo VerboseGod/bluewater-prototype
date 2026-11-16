@@ -1,6 +1,9 @@
 import {
   BEAM_DRIVE,
   BEAM_HUMP,
+  BROAD_DRIVE,
+  BROAD_DRIVE_AFT,
+  BROAD_HUMP,
   BOOM_YAW,
   CAPSIZE_ASSIST,
   CAPSIZE_MANUAL,
@@ -305,7 +308,12 @@ export class Simulation {
 
     // A reaching rig works harder around the beam. Close-hauled is left alone.
     const beam = smoothstep(1.02, 1.38, twaAbs) * (1 - smoothstep(1.92, 2.28, twaAbs));
-    drive *= 1 + BEAM_DRIVE * beam;
+    // Broad reach, after the beam window has shut. Zero on the beam and upwind.
+    // Deeper angles sit further under the hump, so the help grows toward 135°.
+    const span = smoothstep(1.98, 2.08, twaAbs) * (1 - smoothstep(2.62, 2.95, twaAbs));
+    const aft = smoothstep(2.08, 2.38, twaAbs);
+    const broad = span * (0.76 + 0.24 * aft);
+    drive *= 1 + BEAM_DRIVE * beam + (BROAD_DRIVE + BROAD_DRIVE_AFT * aft) * span;
 
     // Light air: weight out in the breeze just adds drag. Sitting in, or a
     // touch to leeward, keeps the boat moving.
@@ -354,7 +362,8 @@ export class Simulation {
     if (this.crewManual && tackQuality > 0.55 && twaAbs < 0.9 && sail.mode !== 'stalled' && vFwd > 0.4) {
       drive += 22 * tackQuality;
     }
-    const hydro = hullForces(vFwd, vStbd, this.heel, this.planing, 1 - BEAM_HUMP * beam);
+    const humpRelief = Math.min(0.93, BEAM_HUMP * beam + BROAD_HUMP * broad);
+    const hydro = hullForces(vFwd, vStbd, this.heel, this.planing, 1 - humpRelief);
     if (this.crewManual && tackQuality > 0.35 && vFwd > 0) {
       // Coordinated tack: the board stays planted and the hull is not dug in.
       hydro.fwd *= 1 - 0.75 * tackQuality;

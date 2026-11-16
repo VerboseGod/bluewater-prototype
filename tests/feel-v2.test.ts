@@ -175,6 +175,33 @@ describe('feel pass 2', () => {
     expect(wind, `windward heel bear-away ${(-wind).toFixed(1)}°`).toBeLessThan(-3);
   });
 
+  it('holds a broad reach near 5.5–6 kn and planes when a gust reaches 13 kn', () => {
+    const at = (twa: number, gustKn: number) => {
+      const sim = makeSim();
+      sim.wind.gustFactor = gustKn / (sim.wind.baseSpeed * KT);
+      const heading = courseHeading(sim.wind.baseFrom, twa);
+      sim.heading = heading;
+      sim.vx = Math.cos(heading) * 2.5;
+      sim.vy = Math.sin(heading) * 2.5;
+      settle(sim, 18, heading);
+      return { kn: Math.max(0, sim.snapshot.vFwd) * KT, plane: sim.planing };
+    };
+    for (const twa of [120, 125, 130, 135]) {
+      const row = at(twa, 11);
+      expect(row.kn, `${twa}° in 11 kn`).toBeGreaterThanOrEqual(5.5);
+      expect(row.kn, `${twa}° in 11 kn`).toBeLessThanOrEqual(6.05);
+      expect(row.plane, `${twa}° should not plane in 11 kn`).toBe(false);
+    }
+    expect(at(45, 11).kn).toBeGreaterThan(4.55);
+    expect(at(45, 11).kn).toBeLessThan(4.8);
+    expect(at(50, 11).kn).toBeGreaterThan(4.85);
+    expect(at(50, 11).kn).toBeLessThan(5.05);
+    expect(at(90, 11).kn).toBeGreaterThan(5.75);
+    expect(at(90, 11).kn).toBeLessThan(6.05);
+    expect(at(125, 13).plane, '13 kn gust on a broad reach').toBe(true);
+    expect(at(135, 14).plane, '14 kn gust on a deep broad reach').toBe(true);
+  });
+
   it('peaks near 6 kn on a beam reach in 11 kn', () => {
     let best = { twa: 0, kn: 0 };
     for (let twa = 75; twa <= 105; twa += 5) {

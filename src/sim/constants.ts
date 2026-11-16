@@ -67,10 +67,19 @@ export const RECOVERY_TIME = 3.5;
 export const SHEET_RATE = 0.7;
 
 export const PLANING_DROP = 0.38;
-/** True-wind speed to get onto a plane, m/s (about 13 kn). Drop-off is lower. */
-export const PLANING_ONSET = 6.69;
+/** True-wind speed to get onto a plane, m/s (a gust to about 13 kn). Drop-off is lower. */
+export const PLANING_ONSET = 6.66;
 /** Stay on the plane down to this true wind, m/s (about 10.5 kn). */
 export const PLANING_OFF = 5.4;
 /** Beam-reach drive multiplier and how much of the displacement hump to skip. */
 export const BEAM_DRIVE = 0.26;
 export const BEAM_HUMP = 0.46;
+/**
+ * Broad reach (about 120–135°). The beam window has closed, so the hull is
+ * back on the full wave-making hump and the boat sticks near 4.9 kn. This
+ * eases that hump and adds a little drive only aft of the beam.
+ */
+export const BROAD_DRIVE = 0.14;
+/** Extra drive added as the broad reach deepens toward 135°. */
+export const BROAD_DRIVE_AFT = 0.5;
+export const BROAD_HUMP = 0.88;

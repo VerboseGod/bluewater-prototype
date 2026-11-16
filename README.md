@@ -53,9 +53,10 @@ Settled with a decent sheet:
 - Inside about 35° the boat stops and the sail is luffing. Between about 38° and 45° it pinches: speed falls off and the windward telltales lift before the stall.
 - Close-hauled at 45° is about 4.7 kn and at 50° about 4.9 kn. Best VMG stays around 42–45°.
 - A beam reach is about 5.9 kn. The displacement hump is softer on that heading, which is what lets the boat sit near 6 kn.
+- A broad reach, about 120–135°, is about 5.5–6 kn. That band is aft of the beam window, so it gets its own share of the hump relief.
 - A good tack (smooth helm, sheet eased through the wind, sailor across as the sail goes light) keeps about 60% of entry speed, roughly 4.9 kn down to 3.0 kn, and takes about 4–5 seconds. A rushed helm with the sheet pinned and the sailor left on the old rail keeps about a third of that speed.
 - Heel steers. Leeward heel rounds the boat up; windward heel bears it away. A gust upwind does the same unless you hike, ease, or feather. A flat reach with the tiller centered does not walk up.
-- Planing starts near 14 kn true on a broad reach, with the sheet eased and the boat flat, and it stays on down to about 11 kn. Bearing away into a gust on an 11 kn day is enough to pop it. Once the boat is up, the apparent wind comes forward and the sheet has to come in or the sail luffs and the plane dies.
+- Planing starts when a gust takes the true wind to about 13–14 kn on a broad reach, with the sheet eased and the boat flat, and it stays on down to about 11 kn. Once the boat is up, the apparent wind comes forward and the sheet has to come in or the sail luffs and the plane dies.
 - A dead run with the sheet over-eased rolls. Sailing by the lee gybes the boom without a helm movement.
 - In 16 kn or more, a gybe with the sheet eased and no hike can capsize.
 
