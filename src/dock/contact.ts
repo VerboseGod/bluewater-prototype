@@ -111,11 +111,12 @@ export function resolveContact(
   sim: Simulation,
   wasTouching: boolean,
   fenders = true,
+  solids: readonly Aabb[] = SOLIDS,
 ): { touching: boolean; closing: number; hit: ImpactClass } {
   let touching = false;
   let closing = 0;
   for (let pass = 0; pass < 2; pass++) {
-    for (const box of SOLIDS) {
+    for (const box of solids) {
       const c = separate(sim, box, fenders);
       if (c == null) continue;
       touching = true;

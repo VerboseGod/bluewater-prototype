@@ -12,9 +12,12 @@ import { DemoDirector } from './render/demo';
 import { BowSpray, Wake, WindCues } from './render/effects';
 import { Ocean } from './render/ocean';
 import { Marks, makeCoast } from './render/scenery';
-import { applySkyQuality, createSky, followBoat, type SkyRig } from './render/sky';
+import { applySkyQuality, applyTimeOfDay, createSky, followBoat, setShadowStage, type SkyRig, type TimeOfDay } from './render/sky';
+import { wrapPi } from './sim/math';
 import { DockSession } from './dock/session';
 import type { DockReport } from './dock/score';
+import { HarbourSession, type HarbourReport } from './harbour/session';
+import { HerzliyaView } from './render/herzliya';
 import { Hud, hintFor } from './hud';
 import { attachKeyboard, readInput, rumble, setPadLayout, type InputState } from './input';
 import { HarbourView } from './render/harbour';
@@ -48,6 +51,15 @@ export class Game {
   private sim = openWater();
   private dock: DockSession | null = null;
   private harbour: HarbourView | null = null;
+  private marina: HarbourSession | null = null;
+  private herzliya: HerzliyaView | null = null;
+  private coast: ReturnType<typeof makeCoast>;
+  private pace = 1;
+  private overview = false;
+  private shot = '';
+  private reel = false;
+  private reelT = 0;
+  private reelHeading = -0.4;
   private hud: Hud;
   private renderer: WebGLRenderer;
   private scene = new Scene();
@@ -83,12 +95,19 @@ export class Game {
   private stick: Controls | null = null;
 
   constructor(root: HTMLElement) {
-    const dockQuery = params.get('scenario') === 'dock';
+    const scenario = params.get('scenario');
+    const dockQuery = scenario === 'dock';
+    const harbourQuery = scenario === 'harbour';
     this.quality = params.get('quality') === 'high' || params.has('demo') ? 'high' : 'low';
-    this.demo = params.has('demo') && !dockQuery ? new DemoDirector() : null;
+    this.demo = params.has('demo') && !dockQuery && !harbourQuery ? new DemoDirector() : null;
+    this.pace = harbourQuery ? Math.max(1, Math.min(16, Number(params.get('pace')) || 1)) : 1;
+    const shot = params.get('shot');
+    this.overview = harbourQuery && (shot === 'overview' || shot === 'entrance' || shot === 'berth');
+    this.shot = shot === 'berth' || shot === 'entrance' || shot === 'overview' ? shot : '';
+    this.reel = harbourQuery && params.has('reel');
     this.capture = params.has('capture');
     this.bench = params.has('bench');
-    this.lockShot = params.has('shot');
+    this.lockShot = params.has('shot') && !harbourQuery;
     if (this.demo) this.camMode = 'cinema';
     if (this.lockShot) this.paused = true;
 
@@ -113,7 +132,8 @@ export class Game {
     this.wake = new Wake(this.quality);
     this.spray = new BowSpray(this.quality);
     this.boat.setContactShadow(true);
-    this.scene.add(this.ocean.mesh, makeCoast(), this.marks.group, this.cues.group, this.wake.mesh, this.spray.mesh, this.boat.group);
+    this.coast = makeCoast();
+    this.scene.add(this.ocean.mesh, this.coast, this.marks.group, this.cues.group, this.wake.mesh, this.spray.mesh, this.boat.group);
 
     this.hud.onToggleMode = () => {
       this.sim.assisted = !this.sim.assisted;
@@ -125,11 +145,15 @@ export class Game {
       if (this.paused) this.showDebrief();
     };
     this.hud.onToggleDock = () => this.toggleScenario();
+    this.hud.onToggleHarbour = () => this.toggleHarbour();
+    this.hud.onPlace = (place) => this.goPlace(place);
+    this.hud.onTime = (mode) => this.setTime(mode);
     attachKeyboard(window);
     window.addEventListener('resize', () => this.resize());
     this.resize();
     const query = new URLSearchParams(window.location.search);
     if (query.get('scenario') === 'dock') this.enterDock(query.get('demo') === '1');
+    if (harbourQuery) this.enterHarbour(params.has('demo') && !this.reel);
   }
 
   start(): void {
@@ -162,7 +186,8 @@ export class Game {
     this.sim.wind.steady = steady;
   }
 
-  scenario(): 'open' | 'dock' {
+  scenario(): 'open' | 'dock' | 'harbour' {
+    if (this.marina) return 'harbour';
     return this.dock ? 'dock' : 'open';
   }
 
@@ -170,9 +195,14 @@ export class Game {
     return this.dock ? this.dock.report() : null;
   }
 
+  harbourReport(): HarbourReport | null {
+    return this.marina ? this.marina.report() : null;
+  }
+
   private frame(t: number): void {
     const raw = this.last ? (t - this.last) / 1000 : this.step;
-    const real = Math.min(0.05, raw);
+    const real = Math.min(this.reel ? 0.3 : this.pace > 1 ? 0.12 : 0.05, raw);
+    if (this.reel && !this.paused) this.reelT += Math.min(0.3, raw);
     const dt = this.capture ? 1 / 30 : real;
     this.last = t;
     if (!this.capture) this.fps += (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
@@ -193,14 +223,17 @@ export class Game {
     }
     this.applyInput(input, dt);
     this.draw(dt);
-    const hint = this.dock ? this.dock.hint() : this.demo ? { text: '', urgent: false } : hintFor(this.sim);
-    if (this.dock) {
+    const hint = this.marina ? this.marina.hint() : this.dock ? this.dock.hint() : this.demo ? { text: '', urgent: false } : hintFor(this.sim);
+    if (this.marina) {
+      const strip = this.marina.strip();
+      this.hud.setStrip(strip.text, strip.kind);
+    } else if (this.dock) {
       const strip = this.dock.strip();
       this.hud.setStrip(strip.text, strip.kind);
     } else this.hud.setStrip(null);
     this.hud.render(this.sim, hint.text, hint.urgent, this.quality);
     this.hud.setFps(this.capture ? 0 : this.fps);
-    if (this.paused) this.hud.drawDebrief(this.sim);
+    if (this.paused) this.showDebrief();
     this.noteBench(raw);
     if (this.capture) {
       this.serial += 1;
@@ -227,7 +260,8 @@ export class Game {
     if (input.assistPressed) this.sim.assisted = !this.sim.assisted;
     if (input.qualityPressed) this.cycleQuality();
     if (input.resetPressed) {
-      if (this.dock) this.dock.reset();
+      if (this.marina) this.marina.reset();
+      else if (this.dock) this.dock.reset();
       else this.sim.resetBoat();
     }
     if (input.camera) this.camMode = input.camera;
@@ -239,10 +273,14 @@ export class Game {
     this.orbit *= Math.exp(-dt * 0.45);
 
     if (!this.paused) {
-      this.acc += dt;
+      this.acc += dt * this.pace;
       let guard = 0;
-      while (this.acc >= this.step && guard < 5) {
-        if (this.dock) this.dock.step(this.step, this.stick ? { ...input, ...this.stick } : input);
+      const guardMax = this.pace > 1 ? 90 : this.reel ? 24 : 5;
+      while (this.acc >= this.step && guard < guardMax) {
+        let frameInput = this.stick ? { ...input, ...this.stick } : input;
+        if (this.reel && this.marina && !this.stick) frameInput = reelStick(frameInput, this.sim.heading, this.reelHeading, this.reelT, this.sim.snapshot.speed);
+        if (this.marina) this.marina.step(this.step, frameInput);
+        else if (this.dock) this.dock.step(this.step, frameInput);
         else {
           this.sim.step(this.step, this.stick ?? {
             rudder: input.rudder,
@@ -278,6 +316,7 @@ export class Game {
       stbd: surf(-0.4, -0.48),
     });
     if (this.harbour && this.dock) this.harbour.update(this.dock.view());
+    if (this.herzliya && this.marina) this.herzliya.update(time);
     this.boat.group.position.set(s.x, pose.y + (s.capsized ? 0.05 : 0), s.y);
     this.boat.group.rotation.set(0, -s.heading, 0);
     this.boat.group.rotateX(-s.heel - pose.roll + (s.capsized ? s.capsizeSide * 1.15 : 0));
@@ -302,12 +341,26 @@ export class Game {
     this.spray.update(dt, s.x, s.y, s.heading, s.speed, pose.y, this.camera.position, this.paused, impact);
     this.marks.update(time, (x, z) => this.ocean.heightAt(x, z, time));
     this.sky.sky.material.uniforms.time.value = time;
-    followBoat(this.sky, s.x, s.y);
+    followBoat(this.sky, s.x, s.y, this.marina ? 130 : 36);
     this.placeCamera(s, pose.y, dt);
     this.renderer.render(this.scene, this.camera);
   }
 
   private placeCamera(s: SimSnapshot, waterY: number, dt: number): void {
+    if (this.reel && this.marina && !this.overview) {
+      this.camera.up.set(0, 1, 0);
+      const frame = this.reelT < 32 ? berthFrame(this.sim) : entranceFrame(this.marina);
+      this.camera.position.set(frame.px, frame.py, frame.pz);
+      this.camera.lookAt(frame.lx, frame.ly, frame.lz);
+      return;
+    }
+    if (this.overview && this.marina) {
+      this.camera.up.set(0, 1, 0);
+      const frame = this.shot === 'entrance' || this.shot === 'overview' ? entranceFrame(this.marina) : berthFrame(this.sim);
+      this.camera.position.set(frame.px, frame.py, frame.pz);
+      this.camera.lookAt(frame.lx, frame.ly, frame.lz);
+      return;
+    }
     if (this.lockShot) {
       this.camera.up.set(0, 1, 0);
       this.camera.position.set(-9.3, 4.15, -0.35);
@@ -331,14 +384,14 @@ export class Game {
       dest.set(s.x - fx * 0.7, waterY + 1.35, s.y - fz * 0.7);
       look.set(s.x + fx * 14, waterY + 1.45, s.y + fz * 14);
       this.camera.up.set(0, 1, 0);
-    } else if (this.camMode === 'chase' && !this.dock) {
+    } else if (this.camMode === 'chase' && !this.dock && !this.marina) {
       const aim = chaseAim(s.x, s.y, s.heading, s.awa, s.twa, waterY, this.pitch);
       dest.set(aim.x, aim.y, aim.z);
       look.set(aim.lookX, aim.lookY, aim.lookZ);
       this.camera.up.set(0, 1, 0);
     } else {
-      const dist = this.dock ? 18 : 12.4;
-      const elev = this.dock ? 9.5 + this.pitch * 2.4 : 3.35 + this.pitch * 1.3;
+      const dist = this.marina ? 22 : this.dock ? 18 : 12.4;
+      const elev = this.marina ? 11 + this.pitch * 3 : this.dock ? 9.5 + this.pitch * 2.4 : 3.35 + this.pitch * 1.3;
       dest.set(s.x + Math.cos(behind) * dist, waterY + elev, s.y + Math.sin(behind) * dist);
       look.y = waterY + (this.dock ? 1.1 : 1.35);
       this.camera.up.set(0, 1, 0);
@@ -382,23 +435,34 @@ export class Game {
   private cycleQuality(): void {
     this.quality = this.quality === 'low' ? 'high' : 'low';
     this.ocean.setQuality(this.quality);
-    this.ocean.setSheltered(!!this.dock);
+    if (this.marina) this.ocean.setHarbour(true, this.marina.world.basin);
+    else this.ocean.setSheltered(!!this.dock);
     this.cues.setQuality(this.quality);
     this.spray.setQuality(this.quality);
     applySkyQuality(this.renderer, this.sky, this.quality);
+    if (this.marina) setShadowStage(this.sky, 'harbour', this.quality === 'high');
     this.boat.setContactShadow(true);
     this.renderer.setPixelRatio(this.quality === 'high' ? Math.min(window.devicePixelRatio || 1, 1.25) : 1);
     this.resize();
   }
 
   private showDebrief(): void {
-    if (this.dock) this.hud.drawDockDebrief(this.sim, this.dock.report());
+    if (this.marina) this.hud.drawHarbourDebrief(this.sim, this.marina.report(), this.marina.world);
+    else if (this.dock) this.hud.drawDockDebrief(this.sim, this.dock.report());
     else this.hud.drawDebrief(this.sim);
   }
 
   private toggleScenario(): void {
-    if (this.dock) this.enterOpen();
+    if (this.marina) this.enterOpen();
+    else if (this.dock) this.enterOpen();
     else this.enterDock(false);
+    this.paused = false;
+    this.hud.setPaused(false);
+  }
+
+  private toggleHarbour(): void {
+    if (this.marina) this.enterOpen();
+    else this.enterHarbour(false);
     this.paused = false;
     this.hud.setPaused(false);
   }
@@ -418,15 +482,69 @@ export class Game {
     this.pitch = 0.55;
   }
 
+  private enterHarbour(demo: boolean): void {
+    if (this.dock) {
+      this.dock = null;
+      if (this.harbour) this.harbour.group.visible = false;
+    }
+    this.marina = new HarbourSession({ demo, wind: demo ? 3 : 0 });
+    this.sim = this.marina.sim;
+    if (!this.herzliya) {
+      this.herzliya = new HerzliyaView(this.quality, this.marina.world);
+      this.scene.add(this.herzliya.group);
+    }
+    this.herzliya.group.visible = true;
+    this.coast.visible = false;
+    this.marks.group.visible = false;
+    this.ocean.setHarbour(true, this.marina.world.basin);
+    this.sky.fog.density = 0.00115;
+    this.setTime('golden');
+    setShadowStage(this.sky, 'harbour', this.quality === 'high');
+    setPadLayout('dock');
+    this.hud.setScenario('harbour');
+    this.pitch = 0.35;
+    const home = berthFrame(this.sim);
+    this.camPos.set(home.px, home.py, home.pz);
+    this.smooth.set(home.lx, home.ly, home.lz);
+    this.marina.step(1 / 60, blankInput());
+    if (this.reel) {
+      const course = this.marina.world.course;
+      this.reelHeading = Math.atan2(course.cleat.y - course.start.y, course.cleat.x - course.start.x);
+    }
+    if (this.overview) this.paused = true;
+  }
+
   private enterOpen(): void {
     this.dock = null;
+    this.marina = null;
+    this.pace = 1;
     this.sim = openWater();
     if (this.harbour) this.harbour.group.visible = false;
+    if (this.herzliya) this.herzliya.group.visible = false;
+    this.coast.visible = true;
     this.marks.group.visible = true;
     this.ocean.setSheltered(false);
+    this.sky.fog.density = 0.0085;
+    this.setTime('day');
+    setShadowStage(this.sky, 'boat', this.quality === 'high');
     setPadLayout('sail');
     this.hud.setScenario('open');
     this.hud.setStrip(null);
+  }
+
+  private setTime(mode: TimeOfDay): void {
+    applyTimeOfDay(this.sky, mode);
+    this.renderer.toneMappingExposure = mode === 'day' ? 0.84 : mode === 'dusk' ? 1.05 : 1.35;
+    this.ocean.setSun(this.sky.sunDir, this.sky.horizon);
+    this.hud.setTime(mode);
+  }
+
+  private goPlace(place: 'open' | 'dock' | 'harbour'): void {
+    if (place === 'open') this.enterOpen();
+    else if (place === 'dock') this.enterDock(false);
+    else this.enterHarbour(false);
+    this.paused = false;
+    this.hud.setPaused(false);
   }
 
   private resize(): void {
@@ -436,4 +554,55 @@ export class Game {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
   }
+}
+
+/** South of the dinghy, looking north across the berth into the marina. */
+function blankInput(): InputState {
+  return {
+    rudder: 0,
+    sheetIn: 0,
+    sheetOut: 0,
+    hike: 0,
+    moveIn: 0,
+    orbitX: 0,
+    orbitY: 0,
+    assistPressed: false,
+    resetPressed: false,
+    pausePressed: false,
+    qualityPressed: false,
+    camera: null,
+    cycleCamera: false,
+    usingGamepad: false,
+    dockPressed: false,
+    anchorPressed: false,
+    moorPressed: false,
+    scopeOut: false,
+    scopeIn: false,
+    windPressed: false,
+    tidePressed: false,
+  };
+}
+
+function reelStick(input: InputState, heading: number, target: number, reelT: number, speed: number): InputState {
+  const err = wrapPi(target - heading);
+  const sail = reelT < 34;
+  return {
+    ...input,
+    rudder: Math.max(-0.5, Math.min(0.5, -err * 1.4)),
+    sheetIn: sail ? 1 : 0,
+    sheetOut: sail ? 0 : 1,
+    hike: 0.15,
+    moveIn: 0,
+    paddle: sail && speed < 0.7,
+  };
+}
+
+export function berthFrame(sim: { x: number; y: number }): { px: number; py: number; pz: number; lx: number; ly: number; lz: number } {
+  return { px: sim.x + 16, py: 6.4, pz: sim.y - 13, lx: sim.x - 1.5, ly: 1.35, lz: sim.y + 3 };
+}
+
+/** Just outside the entrance, looking in past the breakwater lights. */
+export function entranceFrame(session: HarbourSession): { px: number; py: number; pz: number; lx: number; ly: number; lz: number } {
+  const g = session.world.course.gate;
+  return { px: g.x - 26, py: 9.5, pz: g.y + 18, lx: g.x + 22, ly: 2.2, lz: g.y - 14 };
 }

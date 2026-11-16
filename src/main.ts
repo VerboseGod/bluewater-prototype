@@ -1,5 +1,6 @@
 import './style.css';
 import type { DockReport } from './dock/score';
+import type { HarbourReport } from './harbour/session';
 import { Game } from './game';
 import type { SimSnapshot } from './sim/sim';
 
@@ -12,7 +13,11 @@ game.start();
 declare global {
   interface Window {
     __BLUEWATER__?: {
-      getState: () => SimSnapshot & { scenario: 'open' | 'dock'; dock: DockReport | null };
+      getState: () => SimSnapshot & {
+        scenario: 'open' | 'dock' | 'harbour';
+        dock: DockReport | null;
+        harbour: HarbourReport | null;
+      };
       frame: number;
       ack: number;
       bench: { fps: number; ms: number; quality: string } | null;
@@ -27,7 +32,12 @@ declare global {
 }
 
 window.__BLUEWATER__ = {
-  getState: () => ({ ...game.state(), scenario: game.scenario(), dock: game.dockReport() }),
+  getState: () => ({
+    ...game.state(),
+    scenario: game.scenario(),
+    dock: game.dockReport(),
+    harbour: game.harbourReport(),
+  }),
   frame: 0,
   ack: 0,
   bench: null,

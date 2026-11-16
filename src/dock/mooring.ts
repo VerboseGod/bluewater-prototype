@@ -7,13 +7,14 @@ export function nearerFairlead(
   x: number,
   y: number,
   heading: number,
+  cleat: { x: number; y: number } = CLEAT,
 ): { x: number; y: number; dist: number } {
   const sx = Math.sin(heading) * HALF_BEAM;
   const sy = -Math.cos(heading) * HALF_BEAM;
   const a = { x: x + sx, y: y + sy };
   const b = { x: x - sx, y: y - sy };
-  const da = Math.hypot(a.x - CLEAT.x, a.y - CLEAT.y);
-  const db = Math.hypot(b.x - CLEAT.x, b.y - CLEAT.y);
+  const da = Math.hypot(a.x - cleat.x, a.y - cleat.y);
+  const db = Math.hypot(b.x - cleat.x, b.y - cleat.y);
   return da <= db ? { x: a.x, y: a.y, dist: da } : { x: b.x, y: b.y, dist: db };
 }
 
@@ -22,17 +23,20 @@ export function canMakeFast(distM: number, speedMs: number): boolean {
   return distM <= MOOR_REACH + 1e-6 && speedMs <= MOOR_MS + 1e-9;
 }
 
-export function mooringReadiness(sim: Simulation): { dist: number; speed: number; ok: boolean } {
-  const lead = nearerFairlead(sim.x, sim.y, sim.heading);
+export function mooringReadiness(
+  sim: Simulation,
+  cleat: { x: number; y: number } = CLEAT,
+): { dist: number; speed: number; ok: boolean } {
+  const lead = nearerFairlead(sim.x, sim.y, sim.heading, cleat);
   const speed = waterSpeed(sim.vx, sim.vy, sim.currentX, sim.currentY);
   return { dist: lead.dist, speed, ok: canMakeFast(lead.dist, speed) };
 }
 
 /** A short line to the cleat, once the throw has succeeded. */
-export function holdMooring(sim: Simulation, dt: number): void {
-  const lead = nearerFairlead(sim.x, sim.y, sim.heading);
-  const dx = CLEAT.x - lead.x;
-  const dy = CLEAT.y - lead.y;
+export function holdMooring(sim: Simulation, dt: number, cleat: { x: number; y: number } = CLEAT): void {
+  const lead = nearerFairlead(sim.x, sim.y, sim.heading, cleat);
+  const dx = cleat.x - lead.x;
+  const dy = cleat.y - lead.y;
   const dist = Math.hypot(dx, dy);
   const slack = 0.32;
   if (dist > slack) {

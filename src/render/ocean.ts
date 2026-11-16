@@ -21,6 +21,8 @@ uniform vec4 uB[8];
 uniform int uPhys;
 uniform vec4 uPhysA[4];
 uniform vec4 uPhysB[4];
+uniform int uBasinN;
+uniform vec2 uBasin[48];
 
 varying vec3 vWorld;
 varying vec3 vNormal;
@@ -64,11 +66,31 @@ vec3 gerstner(vec2 p, out vec3 n, out float foam) {
   return disp;
 }
 
+float basinShelter(vec2 p) {
+  if (uBasinN < 3) return 1.0;
+  bool inside = false;
+  for (int i = 0; i < 48; i++) {
+    if (i >= uBasinN) break;
+    int j = i + 1;
+    if (j >= uBasinN) j = 0;
+    vec2 a = uBasin[i];
+    vec2 b = uBasin[j];
+    if ((a.y > p.y) != (b.y > p.y)) {
+      float xint = (b.x - a.x) * (p.y - a.y) / (b.y - a.y + 1e-5) + a.x;
+      if (p.x < xint) inside = !inside;
+    }
+  }
+  return inside ? 0.2 : 1.0;
+}
+
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
   vec3 n;
   float foam;
   vec3 d = gerstner(world.xz, n, foam);
+  float shelter = basinShelter(world.xz);
+  d *= shelter;
+  foam *= shelter;
   world.x += d.x;
   world.z += d.z;
   world.y += d.y;
@@ -366,6 +388,8 @@ export class Ocean {
   private wake: WakeSample[] = [];
   private amp = 1;
   private quality: 'low' | 'high';
+  private extent = 300;
+  private harbour = false;
 
   constructor(quality: 'low' | 'high', env: CubeTexture) {
     this.quality = quality;
@@ -384,6 +408,8 @@ export class Ocean {
         uPhys: { value: 4 },
         uPhysA: { value: physA },
         uPhysB: { value: physB },
+        uBasinN: { value: 0 },
+        uBasin: { value: Array.from({ length: 48 }, () => new Vector2()) },
         uDeep: { value: new Color('#062433') },
         uShallow: { value: new Color('#1c8f86') },
         uScatter: { value: new Color('#3ecfb4') },
@@ -426,18 +452,46 @@ export class Ocean {
 
   /** Flat basin, or the swell that belongs to the current quality. */
   setSheltered(sheltered: boolean): void {
+    this.harbour = false;
+    this.extent = 300;
+    this.rebuild(this.quality === 'high' ? 160 : 72);
+    this.setBasin([]);
     this.setWaveCount(sheltered ? 0 : waveCountFor(this.quality));
+  }
+
+  /**
+   * Harbour water: a wider mesh, and a calmer basin wherever the polygon says
+   * the boat is inside the breakwater. Open water leaves the polygon empty.
+   */
+  setHarbour(on: boolean, basin: { x: number; y: number }[]): void {
+    this.harbour = on;
+    this.extent = on ? 1100 : 300;
+    const segments = on ? (this.quality === 'high' ? 150 : 70) : this.quality === 'high' ? 160 : 72;
+    this.rebuild(segments);
+    this.setBasin(on ? basin : []);
+    if (on) this.setWaveCount(waveCountFor(this.quality));
+  }
+
+  setBasin(points: { x: number; y: number }[]): void {
+    const n = Math.min(48, points.length);
+    this.material.uniforms.uBasinN.value = n;
+    const arr = this.material.uniforms.uBasin.value as Vector2[];
+    for (let i = 0; i < 48; i++) {
+      const p = points[i];
+      if (p) arr[i].set(p.x, p.y);
+    }
   }
 
   setQuality(quality: 'low' | 'high'): void {
     this.quality = quality;
-    const segments = quality === 'high' ? 160 : 72;
-    if (segments !== this.segments) {
-      this.segments = segments;
-      this.geometry.dispose();
-      this.geometry = this.makeGeometry(segments);
-      this.mesh.geometry = this.geometry;
-    }
+    const segments = this.harbour
+      ? quality === 'high'
+        ? 150
+        : 70
+      : quality === 'high'
+        ? 160
+        : 72;
+    this.rebuild(segments);
     this.material.fragmentShader = quality === 'high' ? FRAG : FRAG_LOW;
     this.material.needsUpdate = true;
     this.material.uniforms.uCount.value = waveCountFor(quality);
@@ -536,8 +590,16 @@ export class Ocean {
     }
   }
 
+  private rebuild(segments: number): void {
+    if (segments === this.segments && this.geometry.parameters.width === this.extent) return;
+    this.segments = segments;
+    this.geometry.dispose();
+    this.geometry = this.makeGeometry(segments);
+    this.mesh.geometry = this.geometry;
+  }
+
   private makeGeometry(segments: number): PlaneGeometry {
-    const geo = new PlaneGeometry(300, 300, segments, segments);
+    const geo = new PlaneGeometry(this.extent, this.extent, segments, segments);
     geo.rotateX(-Math.PI / 2);
     return geo;
   }

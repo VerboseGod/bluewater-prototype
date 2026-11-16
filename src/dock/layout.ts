@@ -67,9 +67,9 @@ export function bowOf(x: number, y: number, heading: number): { x: number; y: nu
   return { x: x + Math.cos(heading) * BOW, y: y + Math.sin(heading) * BOW };
 }
 
-/** Degrees off the east-west line of the pontoon. Zero means alongside. */
-export function alongsideAngleDeg(heading: number): number {
-  const toEast = Math.abs(wrapPi(heading));
-  const toWest = Math.abs(wrapPi(heading - Math.PI));
-  return (Math.min(toEast, toWest) * 180) / Math.PI;
+/** Degrees off the pontoon's long axis. Zero means alongside. Axis 0 is east-west. */
+export function alongsideAngleDeg(heading: number, axis = 0): number {
+  const toA = Math.abs(wrapPi(heading - axis));
+  const toB = Math.abs(wrapPi(heading - axis - Math.PI));
+  return (Math.min(toA, toB) * 180) / Math.PI;
 }

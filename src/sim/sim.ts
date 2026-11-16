@@ -169,6 +169,11 @@ export class Simulation {
    */
   currentX = 0;
   currentY = 0;
+  /**
+   * Multiplier on the open-water wave amplitudes at a point. Open water
+   * leaves this at 1, so the swell numbers do not change.
+   */
+  waveScale: (x: number, y: number) => number = () => 1;
   yawRate = 0;
   heel = 0;
   heelRate = 0;
@@ -249,7 +254,7 @@ export class Simulation {
     const twa = wrapPi(wind.from - this.heading);
     this.updateCrew(dt, controls, awa, twa);
 
-    const water = sampleWater(this.x, this.y, this.time, this.waves);
+    const water = sampleWater(this.x, this.y, this.time, this.waves, undefined, this.waveScale(this.x, this.y));
     const fwd = headingFwd(this.heading);
     const stbd = headingStbd(this.heading);
     // Hull and rudder see the water, not the ground. With no current this is

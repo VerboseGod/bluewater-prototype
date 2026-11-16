@@ -93,3 +93,31 @@ Come alongside with the sail luffing. The mooring line reaches about a metre and
 | Menu | P or Esc | Debrief |
 
 The debrief for an attempt shows approach speed, impact speed, distance and angle when you stopped, time, anchor scope, and whether it held, plus one plain-language tip. In this scenario D-pad up and down pay the rode. D-pad left and right, and keys 1 / 2 / 3, still move the camera. V is still the cinematic camera.
+
+## Herzliya harbour
+
+`?scenario=harbour` places the same dinghy in Herzliya Marina, on the Israeli coast. The origin is 32.163°N, 34.794°E. Physics x is east, y is north, in metres, so true north is +y. Open it from the Herzliya button, or with that query. `&demo=1` sails a south-westerly circuit: off a berth, out through the entrance, around two practice marks, and back to the visitor pontoon. `&shot=overview` holds a golden-hour view of the entrance. Z cycles the wind. The default for a player is the westerly sea breeze; WNW and NW are the other afternoon directions. Q is a short paddle for leaving the berth. The mooring line, the anchor, and the docking score are the step-2 systems, aimed at the visitor pontoon.
+
+The debrief draws the track on a chart of the coastline, a depth tint, the entrance lights, and the two practice marks. It records time, groundings, time spent in a wind shadow, and the docking score. Sources is the attributions screen.
+
+Breakwaters and buildings shelter their lee: the wind there is weaker and shifted, more so for a taller wall and less so further downwind. The sea outside the moles is the open-water swell. Inside the basin it is about a fifth of that, and it also falls off as the water gets shallow. Sailing onto land, onto a breakwater footprint, or into water shallower than the board stops the boat and counts a grounding.
+
+### Data
+
+Coastline, breakwaters, piers, building footprints, and seamarks are © OpenStreetMap contributors, under the Open Database Licence. The Overpass extract is checked in at `data/herzliya/osm.json` (OSM timestamp 2026-11-16T21:22:36Z, from https://overpass.openstreetmap.fr/api/interpreter) so a build does not call the network.
+
+Depth outside the marina is the EMODnet Digital Bathymetry (DTM) 2022, coverage `emodnet__mean_2022`, 1/16 arc-minute, about 115 m. Creative Commons Attribution 4.0 International. The catalogue says do not use it for navigation. The subset Lat 32.145–32.185, Long 34.775–34.815 is checked in at `data/herzliya/bathy.json`. Elevation is metres, positive up.
+
+These are assumptions, not charted soundings:
+
+- Inside the basin the depth is a flat 3.5 m, an assumed dredged depth.
+- Within 48 m of the line between the entrance lights, outside the rock, the depth is 4.2 m. The grid reads 0 there and does not resolve the channel.
+- The two large breakwaters are drawn 4.5 m high, the shorter northern ones 3 m. OSM has no height.
+- Buildings use `building:levels` × 3.2 m, or 9 m when levels are missing.
+- Piers are centre-lines, drawn and collided as 2.4 m wide.
+- EMODnet cells deeper than 80 m on this shelf are kept in the file and replaced from their neighbours for shading and grounding.
+- Within 40 m of the coastline, on the water side, depth ramps down to the beach.
+- The two yellow marks are practice marks for this scenario. OSM has no offshore buoys here. The entrance lights in OSM are both Fl 5s, one red and one green.
+- No rock or reef ways were in the extract. Grounding is shoal water, land, and the breakwater footprints.
+
+None of this changes the open-water force, drag, or wave-amplitude numbers. Harbour wind and waves are a scale on top of that sample.

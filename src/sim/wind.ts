@@ -31,6 +31,11 @@ export class WindField {
   gusts: Gust[] = [];
   /** Extra multiplier applied even when the field is steady. 1 = none. */
   gustFactor = 1;
+  /**
+   * Optional local edit applied after the open-water sample. Null leaves the
+   * sample untouched, which is what open water and the physics tests use.
+   */
+  modify: ((x: number, y: number, sample: WindSample) => WindSample) | null = null;
   private nextSpawn = 2.5;
   private rng: () => number;
 
@@ -104,7 +109,8 @@ export class WindField {
     factor *= this.gustFactor;
     speed *= factor;
     const vel = this.flow(from, speed);
-    return { vel, speed, from: wrapPi(from), factor };
+    const sample = { vel, speed, from: wrapPi(from), factor };
+    return this.modify ? this.modify(x, y, sample) : sample;
   }
 }
 

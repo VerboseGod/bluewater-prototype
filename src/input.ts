@@ -28,6 +28,8 @@ export interface InputState {
   windPressed: boolean;
   /** Left stick click. Toggle the light tide. */
   tidePressed: boolean;
+  /** Held. A short paddle, used to leave a berth in the harbour scenario. */
+  paddle?: boolean;
 }
 
 const keys = new Set<string>();
@@ -88,6 +90,7 @@ export function readInput(): InputState {
   let scopeIn = false;
   let windPressed = false;
   let tidePressed = false;
+  let paddle = false;
 
   if (pad && pad.connected) {
     usingGamepad = true;
@@ -136,6 +139,7 @@ export function readInput(): InputState {
   if (keys.has('KeyK')) orbitY += 1;
   if (keys.has('KeyU') || keys.has('u')) scopeOut = true;
   if (keys.has('KeyN') || keys.has('n')) scopeIn = true;
+  if (keys.has('KeyQ') || keys.has('q')) paddle = true;
 
   return {
     rudder: Math.max(-1, Math.min(1, rudder)),
@@ -159,6 +163,7 @@ export function readInput(): InputState {
     scopeIn,
     windPressed: windPressed || consumeKey('KeyZ') || consumeKey('z'),
     tidePressed: tidePressed || consumeKey('KeyT') || consumeKey('t'),
+    paddle,
   };
 }
 

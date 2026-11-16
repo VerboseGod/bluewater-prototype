@@ -75,6 +75,7 @@ export class Scoreboard {
   tHeld: number | null = null;
   private gated = false;
   private stopped = false;
+  private axis = 0;
 
   reset(time: number): void {
     this.approachKn = null;
@@ -96,7 +97,9 @@ export class Scoreboard {
     hit: ImpactClass,
     anchor: AnchorRig,
     mooredOnce: boolean,
+    berthAxis = 0,
   ): void {
+    this.axis = berthAxis;
     const kn = waterSpeed(sim.vx, sim.vy, sim.currentX, sim.currentY) * KT;
     if (!this.gated && fairleadM < 2.2) {
       this.gated = true;
@@ -106,19 +109,19 @@ export class Scoreboard {
     if (hit === 'hard') this.impactClass = 'hard';
     else if (hit === 'gentle' && this.impactClass === 'none') this.impactClass = 'gentle';
     if (this.gated && !this.stopped && kn < 0.35) {
-      this.markStop(sim, fairleadM);
+      this.markStop(sim, fairleadM, this.axis);
     }
     if (mooredOnce && this.tMoored == null) {
       this.tMoored = sim.time;
-      if (!this.stopped) this.markStop(sim, fairleadM);
+      if (!this.stopped) this.markStop(sim, fairleadM, this.axis);
     }
     if (anchor.held && this.tHeld == null) this.tHeld = sim.time;
   }
 
-  private markStop(sim: Simulation, fairleadM: number): void {
+  private markStop(sim: Simulation, fairleadM: number, axis: number): void {
     this.stopped = true;
     this.distAtStop = fairleadM;
-    this.angleAtStopDeg = alongsideAngleDeg(sim.heading);
+    this.angleAtStopDeg = alongsideAngleDeg(sim.heading, axis);
   }
 
   report(sim: Simulation, anchor: AnchorRig, mooredOnce: boolean, fast: boolean): DockReport {
