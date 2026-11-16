@@ -1,3 +1,5 @@
+import type { CoopKeys, PadAxes } from './coop/route';
+
 export interface InputState {
   rudder: number;
   sheetIn: number;
@@ -69,9 +71,9 @@ function edge(prev: boolean, now: boolean): boolean {
 const prevButtons = new Array(16).fill(false);
 
 /** In the dock, D-pad up and down pay the anchor rode. In the learn menu they move the list. */
-let padLayout: 'sail' | 'dock' | 'menu' = 'sail';
+let padLayout: 'sail' | 'dock' | 'menu' | 'coop' = 'sail';
 
-export function setPadLayout(layout: 'sail' | 'dock' | 'menu'): void {
+export function setPadLayout(layout: 'sail' | 'dock' | 'menu' | 'coop'): void {
   padLayout = layout;
 }
 
@@ -149,22 +151,23 @@ export function readInput(): InputState {
   }
 
   const menuKeys = padLayout === 'menu';
-  if (!menuKeys && (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a'))) rudder -= 0.5;
-  if (!menuKeys && (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d'))) rudder += 0.5;
-  if (!menuKeys && (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w'))) sheetIn = Math.max(sheetIn, 1);
-  if (!menuKeys && (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s'))) sheetOut = Math.max(sheetOut, 1);
+  const coopKeys = padLayout === 'coop';
+  if (!menuKeys && !coopKeys && (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a'))) rudder -= 0.5;
+  if (!menuKeys && !coopKeys && (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d'))) rudder += 0.5;
+  if (!menuKeys && !coopKeys && (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w'))) sheetIn = Math.max(sheetIn, 1);
+  if (!menuKeys && !coopKeys && (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s'))) sheetOut = Math.max(sheetOut, 1);
   if (menuKeys) {
     menuUp = menuUp || consumeKey('ArrowUp');
     menuDown = menuDown || consumeKey('ArrowDown');
     menuConfirm = menuConfirm || consumeKey('Enter');
     menuBack = menuBack || consumeKey('Backspace');
   }
-  if (keys.has('Space')) hike = Math.max(hike, 1);
-  if (keys.has('KeyB') || keys.has('b')) moveIn = Math.max(moveIn, 1);
-  if (keys.has('KeyJ')) orbitX -= 1;
-  if (keys.has('KeyL')) orbitX += 1;
-  if (keys.has('KeyI')) orbitY -= 1;
-  if (keys.has('KeyK')) orbitY += 1;
+  if (!coopKeys && keys.has('Space')) hike = Math.max(hike, 1);
+  if (!coopKeys && (keys.has('KeyB') || keys.has('b'))) moveIn = Math.max(moveIn, 1);
+  if (!coopKeys && keys.has('KeyJ')) orbitX -= 1;
+  if (!coopKeys && keys.has('KeyL')) orbitX += 1;
+  if (!coopKeys && keys.has('KeyI')) orbitY -= 1;
+  if (!coopKeys && keys.has('KeyK')) orbitY += 1;
   if (keys.has('KeyU') || keys.has('u')) scopeOut = true;
   if (keys.has('KeyN') || keys.has('n')) scopeIn = true;
   if (keys.has('KeyQ') || keys.has('q')) paddle = true;
@@ -216,6 +219,39 @@ function consumeCamera(): InputState['camera'] {
   if (consumeKey('Digit3')) return 'top';
   if (consumeKey('Digit4') || consumeKey('KeyV')) return 'cinema';
   return null;
+}
+
+export function readPads(): PadAxes[] {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  return [0, 1].map((index) => {
+    const pad = pads[index];
+    if (!pad || !pad.connected) return { connected: false, axes: [0, 0, 0, 0], buttons: Array(16).fill(0) };
+    return {
+      connected: true,
+      axes: [0, 1, 2, 3].map((axis) => pad.axes[axis] ?? 0),
+      buttons: Array.from({ length: 16 }, (_, button) => buttonValue(pad, button)),
+    };
+  });
+}
+
+/** Helm is WASD. Crew is IJKL, with U to answer and O for the vang. */
+export function readCoopKeys(): CoopKeys {
+  const down = (code: string, key: string) => keys.has(code) || keys.has(key);
+  return {
+    helmLeft: down('ArrowLeft', 'arrowleft') || down('KeyA', 'a'),
+    helmRight: down('ArrowRight', 'arrowright') || down('KeyD', 'd'),
+    helmOut: down('ArrowUp', 'arrowup') || down('KeyW', 'w'),
+    helmIn: down('ArrowDown', 'arrowdown') || down('KeyS', 's'),
+    helmCall: down('KeyQ', 'q'),
+    crewSheetIn: down('KeyI', 'i'),
+    crewSheetOut: down('KeyK', 'k'),
+    crewOut: down('KeyJ', 'j'),
+    crewIn: down('KeyL', 'l'),
+    crewReady: down('KeyU', 'u'),
+    crewVang: down('KeyO', 'o'),
+    crewJoin: down('KeyU', 'u'),
+    aiStart: keys.has('Enter'),
+  };
 }
 
 export function rumble(strong: number, weak: number, ms: number): void {

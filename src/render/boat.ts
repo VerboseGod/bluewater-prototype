@@ -29,6 +29,7 @@ const METAL = new Color('#d5dbe2');
 const WOOD = new Color('#8d5a34');
 const SUIT = new Color('#1a2330');
 const VEST = new Color('#f0c14a');
+const CREW_VEST = new Color('#2f8fb5');
 const SKIN = new Color('#e2b89a');
 
 /**
@@ -43,6 +44,12 @@ export class DinghyView {
   private rudder: Group;
   private sailor: Group;
   private torso: Group;
+  private helmBody: Group;
+  private helmTorso: Group;
+  private crewBody: Group;
+  private crewTorso: Group;
+  private vangLine: Mesh;
+  private pair: { helm: number; crew: number } | null = null;
   private telltales: Mesh[] = [];
   private contact: Mesh;
   private readonly cols = 12;
@@ -82,6 +89,7 @@ export class DinghyView {
     );
     vang.position.set(-0.45, -0.28, 0);
     vang.rotation.z = 0.55;
+    this.vangLine = vang;
     this.boom.add(boomMesh, vang);
     this.boom.position.set(0.95, 0.86, 0);
     this.group.add(this.boom);
@@ -106,6 +114,15 @@ export class DinghyView {
     this.sailor = sailor.root;
     this.torso = sailor.torso;
     this.group.add(this.sailor);
+    const helm = makeSailor(VEST);
+    const crew = makeSailor(CREW_VEST);
+    this.helmBody = helm.root;
+    this.helmTorso = helm.torso;
+    this.crewBody = crew.root;
+    this.crewTorso = crew.torso;
+    this.helmBody.visible = false;
+    this.crewBody.visible = false;
+    this.group.add(this.helmBody, this.crewBody);
 
     this.rudder = new Group();
     this.rudder.add(rudderBlade(), tiller(), hikingStick());
@@ -138,6 +155,18 @@ export class DinghyView {
     this.contact.visible = on;
   }
 
+  /** Two bodies for co-op. Null keeps the single sailor on the combined weight. */
+  setPair(helm: number | null, crew: number | null): void {
+    this.pair = helm === null || crew === null ? null : { helm, crew };
+  }
+
+  /** Null leaves the kicker the colour it was built with. */
+  setVang(tight: number | null): void {
+    const mat = this.vangLine.material;
+    if (!(mat instanceof MeshStandardMaterial)) return;
+    mat.color.set(tight === null ? METAL : tight > 0.5 ? '#d6453a' : '#c5ced4');
+  }
+
   update(s: SimSnapshot, rudderCmd: number): void {
     this.boom.rotation.y = -s.boom;
     this.rudder.rotation.y = tillerYaw(rudderCmd);
@@ -152,15 +181,28 @@ export class DinghyView {
     }
     // Crew is starboard-positive. Mesh +z is the positive-awa side, so the pose flips it.
     // Out on the rail the torso hikes; sitting in or to leeward stays nearer the cockpit.
-    const meshZ = -s.crew;
+    if (this.pair && !s.capsized) {
+      this.sailor.visible = false;
+      this.poseSailor(this.helmBody, this.helmTorso, this.pair.helm, -0.85);
+      this.poseSailor(this.crewBody, this.crewTorso, this.pair.crew, 0.2);
+    } else {
+      this.helmBody.visible = false;
+      this.crewBody.visible = false;
+      this.poseSailor(this.sailor, this.torso, s.crew, -0.15);
+      this.sailor.visible = !s.capsized;
+    }
+  }
+
+  private poseSailor(root: Group, torso: Group, starboard: number, along: number): void {
+    const meshZ = -starboard;
     const mag = Math.abs(meshZ);
     const side = Math.sign(meshZ || 1);
     const hikeAmt = Math.max(0, Math.min(1, (mag - 0.18) / 0.84));
-    this.sailor.position.set(-0.15, 0.42, side * mag * (0.88 / 1.02));
-    this.sailor.rotation.x = 0;
-    this.sailor.rotation.z = -side * hikeAmt * 0.95;
-    this.torso.rotation.z = -side * hikeAmt * 0.28;
-    this.sailor.visible = !s.capsized;
+    root.position.set(along, 0.42, side * mag * (0.88 / 1.02));
+    root.rotation.x = 0;
+    root.rotation.z = -side * hikeAmt * 0.95;
+    torso.rotation.z = -side * hikeAmt * 0.28;
+    root.visible = true;
   }
 
   private shapeSail(s: SimSnapshot): void {
@@ -493,10 +535,10 @@ function makeTelltales(parent: Mesh): Mesh[] {
   return list;
 }
 
-function makeSailor(): { root: Group; torso: Group } {
+function makeSailor(vestColor: Color = VEST): { root: Group; torso: Group } {
   const root = new Group();
   const suit = new MeshStandardMaterial({ color: SUIT, roughness: 0.8 });
-  const vestMat = new MeshStandardMaterial({ color: VEST, roughness: 0.55 });
+  const vestMat = new MeshStandardMaterial({ color: vestColor, roughness: 0.55 });
   const skin = new MeshStandardMaterial({ color: SKIN, roughness: 0.7 });
 
   const thigh = (z: number) => {
