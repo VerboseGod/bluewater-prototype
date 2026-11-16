@@ -221,17 +221,21 @@ export class CallMachine {
     const gybe = this.kind === 'gybe';
     if (this.phase === 'called') {
       return gybe
-        ? { helm: 'Stand by to gybe. Wait for ready.', crew: 'Helm called the gybe. Press Y.', banner: 'Stand by to gybe' }
-        : { helm: 'Ready about. Wait for the crew.', crew: 'Helm called ready about. Press Y.', banner: 'Ready about' };
+        ? { helm: 'Wait for the answer.', crew: 'Ready', banner: 'Stand by to gybe' }
+        : { helm: 'Wait for the answer.', crew: 'Ready', banner: 'Ready about' };
     }
-    if (this.phase === 'ready') {
-      return { helm: 'Crew is ready. Put the helm down.', crew: 'You answered. Ease the sheet, then cross.', banner: gybe ? 'Gybe-oh' : 'Lee-oh' };
-    }
-    if (this.phase === 'turning' || this.phase === 'window') {
+    if (this.phase === 'ready' || this.phase === 'turning') {
       return {
-        helm: this.phase === 'window' ? 'Through the wind. Straighten up.' : gybe ? 'Gybe-oh.' : 'Lee-oh.',
-        crew: this.phase === 'window' ? 'New side. Trim on.' : 'Ease the sheet and the vang. Cross the boat.',
-        banner: this.phase === 'window' ? 'Cross and trim' : gybe ? 'Gybe-oh' : 'Lee-oh',
+        helm: 'Helm down.',
+        crew: gybe ? 'Gybe-oh, duck, cross' : 'Duck the boom, cross the boat',
+        banner: gybe ? 'Gybe-oh' : 'Lee-oh',
+      };
+    }
+    if (this.phase === 'window') {
+      return {
+        helm: 'Straighten up.',
+        crew: gybe ? 'Trim for the new course' : 'Trim on, hike',
+        banner: gybe ? 'Gybe-oh' : 'Lee-oh',
       };
     }
     return {

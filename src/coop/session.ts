@@ -254,14 +254,13 @@ export class CoopSession {
 
   private lines(): { helm: string; crew: string } {
     const gybe = this.call.kind === 'gybe';
-    if (this.call.phase === 'called') {
-      return gybe
-        ? { helm: 'Stand by to gybe. Wait for ready.', crew: 'Helm called the gybe. Press Y.' }
-        : { helm: 'Ready about. Wait for the crew.', crew: 'Helm called ready about. Press Y.' };
+    if (this.call.phase === 'called') return { helm: 'Wait for the answer.', crew: 'Ready' };
+    if (this.call.phase === 'ready' || this.call.phase === 'turning') {
+      return { helm: 'Helm down.', crew: gybe ? 'Gybe-oh, duck, cross' : 'Duck the boom, cross the boat' };
     }
-    if (this.call.phase === 'ready') return { helm: 'Crew is ready. Put the helm down.', crew: 'You answered. Ease the sheet, then cross.' };
-    if (this.call.phase === 'turning') return { helm: gybe ? 'Gybe-oh.' : 'Lee-oh.', crew: 'Ease the sheet and the vang. Cross the boat.' };
-    if (this.call.phase === 'window') return { helm: 'Through the wind. Straighten up.', crew: 'New side. Trim on.' };
+    if (this.call.phase === 'window') {
+      return { helm: 'Straighten up.', crew: gybe ? 'Trim for the new course' : 'Trim on, hike' };
+    }
     return { helm: 'Steer and hike. RB calls ready about.', crew: 'Sheet, vang, and trapeze. Y answers.' };
   }
 
@@ -269,8 +268,9 @@ export class CoopSession {
     if (this.drill.phase === 'join') return 'Press A on a second controller';
     if (this.drill.phase === 'done') return 'Back on the line';
     if (this.call.phase === 'called') return this.call.kind === 'gybe' ? 'Stand by to gybe' : 'Ready about';
-    if (this.call.phase === 'ready' || this.call.phase === 'turning') return this.call.kind === 'gybe' ? 'Gybe-oh' : 'Lee-oh';
-    if (this.call.phase === 'window') return 'Cross and trim';
+    if (this.call.phase === 'ready' || this.call.phase === 'turning' || this.call.phase === 'window') {
+      return this.call.kind === 'gybe' ? 'Gybe-oh' : 'Lee-oh';
+    }
     const n = Math.min(3, this.drill.tacks);
     return `Upwind beat. Tack ${n} of 3.`;
   }

@@ -36,25 +36,27 @@ export class CoopOverlay {
       </div>
       <div class="coop-banner hidden" id="coop-banner"></div>
       <div class="coop-split hidden" id="coop-split">
-        <section class="coop-panel">
+        <section class="coop-card helm">
           <h2>Helm</h2>
-          <div class="coop-row">Tiller <b id="coop-rudder-word"></b></div>
-          <div class="bar"><i id="coop-rudder"></i></div>
-          <div class="coop-row">Weight</div>
-          <div class="bar"><i id="coop-helm-weight"></i></div>
-          <p id="coop-helm-line"></p>
-          <p class="coop-keys">Stick steers · A hikes · B sits in · RB ready about</p>
+          <p class="coop-prompt" id="coop-helm-line"></p>
+          <div class="coop-meters">
+            <div class="coop-row">Tiller</div>
+            <div class="bar"><i id="coop-rudder"></i></div>
+            <div class="coop-row">Weight</div>
+            <div class="bar"><i id="coop-helm-weight"></i></div>
+          </div>
         </section>
-        <section class="coop-panel">
+        <section class="coop-card crew">
           <h2>Crew</h2>
-          <div class="coop-row">Mainsheet</div>
-          <div class="bar"><i id="coop-sheet"></i><em class="mark" id="coop-sheet-mark"></em></div>
-          <div class="coop-row">Vang</div>
-          <div class="bar"><i id="coop-vang"></i></div>
-          <div class="coop-row">Trapeze</div>
-          <div class="bar"><i id="coop-crew-weight"></i></div>
-          <p id="coop-crew-line"></p>
-          <p class="coop-keys">Triggers sheet · A trapeze · B in · Y ready · X vang</p>
+          <p class="coop-prompt" id="coop-crew-line"></p>
+          <div class="coop-meters">
+            <div class="coop-row">Mainsheet</div>
+            <div class="bar"><i id="coop-sheet"></i><em class="mark" id="coop-sheet-mark"></em></div>
+            <div class="coop-row">Vang</div>
+            <div class="bar"><i id="coop-vang"></i></div>
+            <div class="coop-row">Trapeze</div>
+            <div class="bar"><i id="coop-crew-weight"></i></div>
+          </div>
         </section>
       </div>
       <div class="coop-report hidden" id="coop-report">
@@ -103,6 +105,7 @@ export class CoopOverlay {
     this.join.classList.add('hidden');
     this.report.classList.add('hidden');
     this.split.classList.remove('hidden');
+    this.split.classList.toggle('idle', view.call === 'idle');
     this.banner.classList.remove('hidden');
     this.banner.textContent = view.banner;
     this.helmLine.textContent = view.helmLine;
