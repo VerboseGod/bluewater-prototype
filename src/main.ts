@@ -14,9 +14,18 @@ declare global {
   interface Window {
     __BLUEWATER__?: {
       getState: () => SimSnapshot & {
-        scenario: 'open' | 'dock' | 'harbour';
+        scenario: 'open' | 'dock' | 'harbour' | 'learn';
         dock: DockReport | null;
         harbour: HarbourReport | null;
+        learn: {
+          phase: string;
+          lesson: number | null;
+          step: string;
+          coach: string;
+          completed: number[];
+          stars: number | null;
+          passed: boolean;
+        } | null;
       };
       frame: number;
       ack: number;
@@ -37,6 +46,7 @@ window.__BLUEWATER__ = {
     scenario: game.scenario(),
     dock: game.dockReport(),
     harbour: game.harbourReport(),
+    learn: game.learnState(),
   }),
   frame: 0,
   ack: 0,

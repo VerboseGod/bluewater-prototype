@@ -202,6 +202,11 @@ export class Simulation {
   private prevBoomSign = 0;
   private crossedBoomAt = -10;
   private rumble: { strong: number; weak: number; ms: number } | null = null;
+  /**
+   * Latest value of the tack-quality term the force model already applies.
+   * Recording it does not change those forces.
+   */
+  lastTackQuality = 0;
   private prevGust = 1;
   private hikeCmd = 0;
   /** Persistent sailor offset once `moveIn` is used. Starboard-positive meters. */
@@ -233,6 +238,7 @@ export class Simulation {
   /** One fixed tick. Pass 1/60 from the game loop. */
   step(dt: number, controls: Controls): void {
     if (this.capsized) {
+      this.lastTackQuality = 0;
       this.stepCapsize(dt);
       return;
     }
@@ -363,6 +369,7 @@ export class Simulation {
     }
 
     const tackQuality = this.tackQuality(controls, twaAbs, toWindward, toLeeward, sail.mode);
+    this.lastTackQuality = tackQuality;
     // A clean tack keeps a little sail drawing through the no-go instead of stalling dead.
     if (this.crewManual && tackQuality > 0.55 && twaAbs < 0.9 && sail.mode !== 'stalled' && vFwd > 0.4) {
       drive += 22 * tackQuality;

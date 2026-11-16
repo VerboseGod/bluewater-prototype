@@ -61,7 +61,7 @@ export class Hud {
   private title: HTMLElement;
   private scenarioBtn: HTMLButtonElement;
   private scenarioMenu: HTMLButtonElement;
-  private scenario: 'open' | 'dock' | 'harbour' = 'open';
+  private scenario: 'open' | 'dock' | 'harbour' | 'learn' = 'open';
   private sources: HTMLElement;
   private placesBtn: HTMLButtonElement;
   private placesPop: HTMLElement;
@@ -73,7 +73,7 @@ export class Hud {
   onTogglePause: () => void = () => undefined;
   onToggleDock: () => void = () => undefined;
   onToggleHarbour: () => void = () => undefined;
-  onPlace: (place: 'open' | 'dock' | 'harbour') => void = () => undefined;
+  onPlace: (place: 'open' | 'dock' | 'harbour' | 'learn') => void = () => undefined;
   onTime: (mode: 'day' | 'golden' | 'dusk') => void = () => undefined;
 
   constructor(parent: HTMLElement) {
@@ -105,6 +105,7 @@ export class Hud {
                 <button type="button" data-place="open">Open water</button>
                 <button type="button" data-place="dock">Docking practice</button>
                 <button type="button" data-place="harbour">Herzliya</button>
+                <button type="button" data-place="learn">Learn to sail</button>
                 <button type="button" data-time="day">Day</button>
                 <button type="button" data-time="golden">Golden hour</button>
                 <button type="button" data-time="dusk">Dusk</button>
@@ -202,7 +203,7 @@ export class Hud {
     this.placesBtn.addEventListener('click', () => this.placesPop.classList.toggle('hidden'));
     this.placesPop.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
-      const place = target.dataset.place as 'open' | 'dock' | 'harbour' | undefined;
+      const place = target.dataset.place as 'open' | 'dock' | 'harbour' | 'learn' | undefined;
       const time = target.dataset.time as 'day' | 'golden' | 'dusk' | undefined;
       if (place) this.onPlace(place);
       if (time) this.onTime(time);
@@ -228,24 +229,27 @@ export class Hud {
     this.pauseBtn.textContent = paused ? 'Resume' : 'Debrief';
   }
 
-  setScenario(mode: 'open' | 'dock' | 'harbour'): void {
+  setScenario(mode: 'open' | 'dock' | 'harbour' | 'learn'): void {
     this.scenario = mode;
     const leave = mode === 'open' ? 'Herzliya' : 'Open water';
     this.scenarioBtn.textContent = leave;
     this.scenarioMenu.textContent = leave;
-    this.placesBtn.textContent = mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
+    this.placesBtn.textContent =
+      mode === 'learn' ? 'Learn' : mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
     if (mode !== 'open') this.link.textContent = 'Keyboard';
     this.legend.textContent =
       mode === 'dock'
         ? 'A out · B in · Y assisted · F anchor · M line · Z wind · View reset · Menu debrief · X graphics'
         : mode === 'harbour'
           ? 'Steer · sheet · Q paddle · Z wind · M line · Places for light · Menu chart · X graphics'
-          : 'Stick steers · triggers sheet · A out · B in · Y assisted · Places · V cinematic · Menu debrief · X graphics';
+          : mode === 'learn'
+            ? 'Stick steers · triggers sheet · A hikes · B crosses · D-pad and A choose a lesson · Menu leaves it'
+            : 'Stick steers · triggers sheet · A out · B in · Y assisted · Places · V cinematic · Menu debrief · X graphics';
     if (mode === 'open') this.strip.classList.add('hidden');
   }
 
   setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info'): void {
-    if ((this.scenario !== 'dock' && this.scenario !== 'harbour') || !text) {
+    if ((this.scenario !== 'dock' && this.scenario !== 'harbour' && this.scenario !== 'learn') || !text) {
       this.strip.classList.add('hidden');
       this.stripText = '';
       return;

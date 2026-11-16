@@ -30,6 +30,14 @@ export interface InputState {
   tidePressed: boolean;
   /** Held. A short paddle, used to leave a berth in the harbour scenario. */
   paddle?: boolean;
+  /** Learn menu. D-pad up, one press. */
+  menuUp?: boolean;
+  /** Learn menu. D-pad down, one press. */
+  menuDown?: boolean;
+  /** Learn menu. A, one press. */
+  menuConfirm?: boolean;
+  /** Learn menu. B, one press. */
+  menuBack?: boolean;
 }
 
 const keys = new Set<string>();
@@ -60,10 +68,10 @@ function edge(prev: boolean, now: boolean): boolean {
 
 const prevButtons = new Array(16).fill(false);
 
-/** In the dock, D-pad up and down pay the anchor rode instead of moving the camera. */
-let padLayout: 'sail' | 'dock' = 'sail';
+/** In the dock, D-pad up and down pay the anchor rode. In the learn menu they move the list. */
+let padLayout: 'sail' | 'dock' | 'menu' = 'sail';
 
-export function setPadLayout(layout: 'sail' | 'dock'): void {
+export function setPadLayout(layout: 'sail' | 'dock' | 'menu'): void {
   padLayout = layout;
 }
 
@@ -91,6 +99,10 @@ export function readInput(): InputState {
   let windPressed = false;
   let tidePressed = false;
   let paddle = false;
+  let menuUp = false;
+  let menuDown = false;
+  let menuConfirm = false;
+  let menuBack = false;
 
   if (pad && pad.connected) {
     usingGamepad = true;
@@ -115,22 +127,38 @@ export function readInput(): InputState {
     else dockPressed = edge(prevButtons[4], now[4] ?? false);
     const up = now[12] ?? false;
     const down = now[13] ?? false;
-    if (padLayout === 'dock') {
+    const left = now[14] ?? false;
+    const right = now[15] ?? false;
+    if (padLayout === 'menu') {
+      menuUp = edge(prevButtons[12], up);
+      menuDown = edge(prevButtons[13], down);
+      menuConfirm = edge(prevButtons[0], now[0] ?? false);
+      menuBack = edge(prevButtons[1], now[1] ?? false);
+    } else if (padLayout === 'dock') {
       scopeOut = up;
       scopeIn = down;
+      if (edge(prevButtons[15], right)) camera = 'cockpit';
+      if (edge(prevButtons[14], left)) camera = 'chase';
     } else {
       if (edge(prevButtons[12], up)) camera = 'chase';
       if (edge(prevButtons[13], down)) camera = 'top';
+      if (edge(prevButtons[15], right)) camera = 'cockpit';
+      if (edge(prevButtons[14], left)) camera = 'chase';
     }
-    if (edge(prevButtons[15], now[15] ?? false)) camera = 'cockpit';
-    if (edge(prevButtons[14], now[14] ?? false)) camera = 'chase';
     for (let i = 0; i < 16; i++) prevButtons[i] = now[i] ?? false;
   }
 
-  if (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a')) rudder -= 0.5;
-  if (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d')) rudder += 0.5;
-  if (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w')) sheetIn = Math.max(sheetIn, 1);
-  if (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s')) sheetOut = Math.max(sheetOut, 1);
+  const menuKeys = padLayout === 'menu';
+  if (!menuKeys && (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a'))) rudder -= 0.5;
+  if (!menuKeys && (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d'))) rudder += 0.5;
+  if (!menuKeys && (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w'))) sheetIn = Math.max(sheetIn, 1);
+  if (!menuKeys && (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s'))) sheetOut = Math.max(sheetOut, 1);
+  if (menuKeys) {
+    menuUp = menuUp || consumeKey('ArrowUp');
+    menuDown = menuDown || consumeKey('ArrowDown');
+    menuConfirm = menuConfirm || consumeKey('Enter');
+    menuBack = menuBack || consumeKey('Backspace');
+  }
   if (keys.has('Space')) hike = Math.max(hike, 1);
   if (keys.has('KeyB') || keys.has('b')) moveIn = Math.max(moveIn, 1);
   if (keys.has('KeyJ')) orbitX -= 1;
@@ -164,6 +192,10 @@ export function readInput(): InputState {
     windPressed: windPressed || consumeKey('KeyZ') || consumeKey('z'),
     tidePressed: tidePressed || consumeKey('KeyT') || consumeKey('t'),
     paddle,
+    menuUp,
+    menuDown,
+    menuConfirm,
+    menuBack,
   };
 }
 
