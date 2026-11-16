@@ -19,8 +19,11 @@ import type { Ring } from '../harbour/geo';
 import { herzliya, type HarbourWorld } from '../harbour/world';
 
 const SAND = new MeshStandardMaterial({ color: '#e4c98a', roughness: 1 });
-const DECK = new MeshStandardMaterial({ color: '#d7cfc3', roughness: 0.72 });
-const SKIRT = new MeshStandardMaterial({ color: '#6d6458', roughness: 0.86 });
+const DECK = new MeshStandardMaterial({ color: '#3f3b36', roughness: 1, metalness: 0 });
+const SKIRT = new MeshStandardMaterial({ color: '#3e3a35', roughness: 0.94 });
+const FENDER = new MeshStandardMaterial({ color: '#141618', roughness: 0.66 });
+const ROCK_MAT = new MeshStandardMaterial({ color: '#2a2622', roughness: 1, vertexColors: true });
+const CAP_MAT = new MeshStandardMaterial({ color: '#9a9488', roughness: 0.84 });
 const MARK = new MeshStandardMaterial({
   color: '#ffd15c',
   emissive: new Color('#ffb703'),
@@ -99,50 +102,15 @@ export class HerzliyaView {
     const g = new Group();
     const rockPos: number[] = [];
     const capPos: number[] = [];
-    const stones: { x: number; y: number; z: number; s: number }[] = [];
-    let stone = 0;
     for (const line of this.world.extract.breakwaters) {
       const ring = openRing(line.pts, line.closed);
-      if (ring.length < 2) continue;
-      const height = line.length > 200 ? 4.6 : 3.1;
-      if (ring.length >= 3) {
-        pushPrism(rockPos, ring, height - 0.45);
-        pushPrism(capPos, inset(ring, 0.62), 0.55, height - 0.35);
-      }
-      for (let i = 1; i < line.pts.length; i++) {
-        const a = line.pts[i - 1];
-        const b = line.pts[i];
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        const steps = Math.max(1, Math.floor(len / 4.2));
-        for (let s = 0; s < steps; s++) {
-          const t = (s + 0.5) / steps;
-          const x = a.x + (b.x - a.x) * t;
-          const y = a.y + (b.y - a.y) * t;
-          const n = hash(stone++);
-          stones.push({ x, y: 0.6 + n * 0.5, z: y, s: 0.7 + n * 1.1 });
-        }
-      }
+      if (ring.length < 3) continue;
+      const crest = line.length > 200 ? 3.6 : 2.6;
+      slopedArmour(rockPos, ring, -1.6, crest, 0.62);
+      pushPrism(capPos, inset(ring, 0.5), 0.42, crest - 0.05);
     }
-    const rockMat = new MeshStandardMaterial({ color: '#4a433c', roughness: 0.96, vertexColors: true });
-    const capMat = new MeshStandardMaterial({ color: '#d5cfc3', roughness: 0.72, vertexColors: true });
-    g.add(meshFrom(rockPos, rockMat, true));
-    g.add(meshFrom(capPos, capMat, true));
-    if (stones.length) {
-      const geo = new SphereGeometry(1, 6, 5);
-      const mat = new MeshStandardMaterial({ color: '#3c3832', roughness: 1 });
-      const mesh = new InstancedMesh(geo, mat, stones.length);
-      const dummy = new Object3D();
-      stones.forEach((st, i) => {
-        dummy.position.set(st.x, st.y, st.z);
-        dummy.scale.set(st.s, st.s * 0.72, st.s);
-        dummy.rotation.set(0, hash(i + 3) * 3, 0);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-      });
-      mesh.castShadow = this.quality === 'high';
-      mesh.receiveShadow = true;
-      g.add(mesh);
-    }
+    g.add(meshFrom(rockPos, ROCK_MAT, true));
+    g.add(meshFrom(capPos, CAP_MAT, true));
     return g;
   }
 
@@ -150,9 +118,12 @@ export class HerzliyaView {
     const g = new Group();
     const deck: number[] = [];
     const skirt: number[] = [];
+    const fender: number[] = [];
     for (const pier of this.world.extract.piers) {
-      addRibbon(deck, pier.pts, 3.6, 0.78, 0.22);
-      addRibbon(skirt, pier.pts, 3.8, 0.15, -0.35);
+      addRibbon(deck, pier.pts, 3.4, 0.62, 0.28);
+      addRibbon(skirt, pier.pts, 3.55, 0.22, -0.25);
+      addFender(fender, pier.pts, 3.4);
+      addEdgeLine(fender, pier.pts, 3.4, 0.66);
       for (let i = 1; i < pier.pts.length; i++) {
         const a = pier.pts[i - 1];
         const b = pier.pts[i];
@@ -168,13 +139,16 @@ export class HerzliyaView {
           const fx = Math.sin(heading) * side;
           const fy = -Math.cos(heading) * side;
           const tip = { x: x + fx * 7.2, y: y + fy * 7.2 };
-          addRibbon(deck, [{ x, y }, tip], 1.7, 0.7, 0.18);
-          addRibbon(skirt, [{ x, y }, tip], 1.9, 0.12, -0.28);
+          addRibbon(deck, [{ x, y }, tip], 1.55, 0.55, 0.26);
+          addRibbon(skirt, [{ x, y }, tip], 1.7, 0.18, -0.2);
+          addFender(fender, [{ x, y }, tip], 1.55);
+          addEdgeLine(fender, [{ x, y }, tip], 1.55, 0.58);
         }
       }
     }
     g.add(meshFrom(deck, DECK));
     g.add(meshFrom(skirt, SKIRT));
+    g.add(meshFrom(fender, FENDER));
     return g;
   }
 
@@ -406,6 +380,94 @@ function meshFrom(positions: number[], material: MeshStandardMaterial, shadow = 
   mesh.receiveShadow = true;
   mesh.frustumCulled = false;
   return mesh;
+}
+
+function slopedArmour(out: number[], ring: Ring[], baseY: number, crestY: number, insetScale: number): void {
+  const crest = inset(ring, insetScale);
+  for (let i = 0; i < ring.length; i++) {
+    const j = (i + 1) % ring.length;
+    const a = ring[i];
+    const b = ring[j];
+    const c = crest[i];
+    const d = crest[j];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    const steps = Math.max(1, Math.round(len / 5));
+    for (let s = 0; s < steps; s++) {
+      const t0 = s / steps;
+      const t1 = (s + 1) / steps;
+      const wobble = (seed: number, t: number) => (hash(seed + Math.floor(t * 17)) - 0.5) * 0.85;
+      const ax = a.x + (b.x - a.x) * t0;
+      const ay = a.y + (b.y - a.y) * t0;
+      const bx = a.x + (b.x - a.x) * t1;
+      const by = a.y + (b.y - a.y) * t1;
+      const cx = c.x + (d.x - c.x) * t0 + wobble(i * 13, t0);
+      const cy = c.y + (d.y - c.y) * t0 + wobble(i * 29, t0);
+      const dx = c.x + (d.x - c.x) * t1 + wobble(i * 13, t1);
+      const dy = c.y + (d.y - c.y) * t1 + wobble(i * 29, t1);
+      const h0 = crestY + wobble(i * 3, t0) * 0.7;
+      const h1 = crestY + wobble(i * 3, t1) * 0.7;
+      out.push(ax, baseY, ay, bx, baseY, by, dx, h1, dy);
+      out.push(ax, baseY, ay, dx, h1, dy, cx, h0, cy);
+    }
+  }
+}
+
+function addEdgeLine(out: number[], pts: Ring[], deckWidth: number, y: number): void {
+  const half = deckWidth / 2;
+  const outer = half - 0.05;
+  const inner = half - 0.42;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    for (const sign of [1, -1]) {
+      const ox = nx * sign;
+      const oy = ny * sign;
+      out.push(
+        a.x + ox * inner, y, a.y + oy * inner,
+        b.x + ox * inner, y, b.y + oy * inner,
+        b.x + ox * outer, y, b.y + oy * outer,
+      );
+      out.push(
+        a.x + ox * inner, y, a.y + oy * inner,
+        b.x + ox * outer, y, b.y + oy * outer,
+        a.x + ox * outer, y, a.y + oy * outer,
+      );
+    }
+  }
+}
+
+function addFender(out: number[], pts: Ring[], deckWidth: number): void {
+  const half = deckWidth / 2;
+  const outer = half + 0.38;
+  const inner = half - 0.08;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    for (const sign of [1, -1]) {
+      const ox = nx * sign;
+      const oy = ny * sign;
+      out.push(
+        a.x + ox * inner, 0.58, a.y + oy * inner,
+        b.x + ox * inner, 0.58, b.y + oy * inner,
+        b.x + ox * outer, 0.12, b.y + oy * outer,
+      );
+      out.push(
+        a.x + ox * inner, 0.58, a.y + oy * inner,
+        b.x + ox * outer, 0.12, b.y + oy * outer,
+        a.x + ox * outer, 0.12, a.y + oy * outer,
+      );
+    }
+  }
 }
 
 function addRibbon(out: number[], pts: Ring[], width: number, top: number, bottom: number): void {
