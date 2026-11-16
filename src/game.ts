@@ -18,6 +18,7 @@ import type { DockReport } from './dock/score';
 import { Hud, hintFor } from './hud';
 import { attachKeyboard, readInput, rumble, setPadLayout, type InputState } from './input';
 import { HarbourView } from './render/harbour';
+import { chaseAim } from './render/chase';
 import { hullFloat } from './render/float';
 import { KT } from './sim/math';
 import { Simulation, type Controls, type SimSnapshot } from './sim/sim';
@@ -330,12 +331,16 @@ export class Game {
       dest.set(s.x - fx * 0.7, waterY + 1.35, s.y - fz * 0.7);
       look.set(s.x + fx * 14, waterY + 1.45, s.y + fz * 14);
       this.camera.up.set(0, 1, 0);
+    } else if (this.camMode === 'chase' && !this.dock) {
+      const aim = chaseAim(s.x, s.y, s.heading, s.awa, s.twa, waterY, this.pitch);
+      dest.set(aim.x, aim.y, aim.z);
+      look.set(aim.lookX, aim.lookY, aim.lookZ);
+      this.camera.up.set(0, 1, 0);
     } else {
-      const cinema = this.camMode === 'cinema';
-      const dist = this.dock ? 18 : cinema ? 12.4 : 11;
-      const elev = this.dock ? 9.5 + this.pitch * 2.4 : cinema ? 3.35 + this.pitch * 1.3 : 3.5 + this.pitch * 2.2;
+      const dist = this.dock ? 18 : 12.4;
+      const elev = this.dock ? 9.5 + this.pitch * 2.4 : 3.35 + this.pitch * 1.3;
       dest.set(s.x + Math.cos(behind) * dist, waterY + elev, s.y + Math.sin(behind) * dist);
-      look.y = waterY + (this.dock ? 1.1 : cinema ? 1.35 : 1.2);
+      look.y = waterY + (this.dock ? 1.1 : 1.35);
       this.camera.up.set(0, 1, 0);
     }
     const posK = 1 - Math.exp(-dt * (this.camMode === 'cinema' ? 1.45 : 2.8));
