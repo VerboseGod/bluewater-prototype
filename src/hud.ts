@@ -3,6 +3,19 @@ import type { DockReport } from './dock/score';
 import { KT, RAD } from './sim/math';
 import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from './sim/sim';
 
+const HINT_HOLD = 3600;
+const HINT_FADE = 1100;
+const HINT_URGENT_HOLD = 5200;
+
+/** 1 while the prompt is up, then a fade, then 0. Empty text stays hidden. */
+export function hintOpacity(ageMs: number, urgent: boolean, text: string): number {
+  if (!text) return 0;
+  const hold = urgent ? HINT_URGENT_HOLD : HINT_HOLD;
+  if (ageMs <= hold) return 1;
+  if (ageMs >= hold + HINT_FADE) return 0;
+  return 1 - (ageMs - hold) / HINT_FADE;
+}
+
 export class Hud {
   readonly root: HTMLElement;
   private speed: HTMLElement;
@@ -33,6 +46,8 @@ export class Hud {
   private scenarioBtn: HTMLButtonElement;
   private scenarioMenu: HTMLButtonElement;
   private scenario: 'open' | 'dock' = 'open';
+  private hintText = '';
+  private hintAt = 0;
   onToggleMode: () => void = () => undefined;
   onToggleQuality: () => void = () => undefined;
   onTogglePause: () => void = () => undefined;
@@ -207,9 +222,15 @@ export class Hud {
     const along = s.crew * windward;
     const sailorPct = Math.max(0, Math.min(100, ((along + 0.45) / 1.5) * 100));
     this.sailorFill.style.width = `${sailorPct}%`;
+    if (hint !== this.hintText) {
+      this.hintText = hint;
+      this.hintAt = performance.now();
+    }
+    const opacity = hintOpacity(performance.now() - this.hintAt, urgent, hint);
     this.hint.textContent = hint;
     this.hint.classList.toggle('urgent', urgent);
-    this.hint.style.visibility = hint ? 'visible' : 'hidden';
+    this.hint.style.opacity = opacity.toFixed(3);
+    this.hint.style.visibility = opacity > 0.02 ? 'visible' : 'hidden';
   }
 
   drawDebrief(sim: Simulation): void {
