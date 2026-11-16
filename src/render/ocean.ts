@@ -119,16 +119,17 @@ float bwNoise(vec2 p) {
 
 void bwRipple(inout vec3 n, vec3 world, float time) {
   float dist = distance(world.xz, cameraPosition.xz);
-  float near = 1.0 - smoothstep(5.0, 32.0, dist);
+  float near = 1.0 - smoothstep(6.0, 36.0, dist);
+  float amp = 0.07 + 0.2 * near;
   vec2 p = world.xz * 1.6 + vec2(time * 0.13, -time * 0.09);
   float e = 0.28;
   float h = bwNoise(p);
-  n.x += (bwNoise(p + vec2(e, 0.0)) - h) / e * 0.22 * near;
-  n.z += (bwNoise(p + vec2(0.0, e)) - h) / e * 0.22 * near;
+  n.x += (bwNoise(p + vec2(e, 0.0)) - h) / e * amp;
+  n.z += (bwNoise(p + vec2(0.0, e)) - h) / e * amp;
   vec2 q = world.xz * 4.8 + vec2(-time * 0.28, time * 0.19);
   float h2 = bwNoise(q);
-  n.x += (bwNoise(q + vec2(e, 0.0)) - h2) / e * 0.08 * near;
-  n.z += (bwNoise(q + vec2(0.0, e)) - h2) / e * 0.08 * near;
+  n.x += (bwNoise(q + vec2(e, 0.0)) - h2) / e * amp * 0.4;
+  n.z += (bwNoise(q + vec2(0.0, e)) - h2) / e * amp * 0.4;
 }
 
 float bwKelvin(vec2 worldXZ, vec2 boat, float heading, float speed, float time) {
@@ -264,16 +265,17 @@ void main() {
   n.x += wdir.x * rip * 0.07;
   n.z += wdir.y * rip * 0.07;
   float distCam = distance(vWorld.xz, cameraPosition.xz);
-  float near = 1.0 - smoothstep(4.0, 30.0, distCam);
+  float near = 1.0 - smoothstep(6.0, 40.0, distCam);
+  float amp = 0.06 + 0.18 * near;
   vec2 rp = vWorld.xz * 2.2 + vec2(uTime * 0.16, -uTime * 0.1);
   float e = 0.22;
   float rh = bwNoise(rp);
-  n.x += (bwNoise(rp + vec2(e, 0.0)) - rh) / e * 0.16 * near;
-  n.z += (bwNoise(rp + vec2(0.0, e)) - rh) / e * 0.16 * near;
+  n.x += (bwNoise(rp + vec2(e, 0.0)) - rh) / e * amp;
+  n.z += (bwNoise(rp + vec2(0.0, e)) - rh) / e * amp;
   vec2 rq = vWorld.xz * 6.4 + vec2(-uTime * 0.33, uTime * 0.21);
   float rh2 = bwNoise(rq);
-  n.x += (bwNoise(rq + vec2(e, 0.0)) - rh2) / e * 0.055 * near;
-  n.z += (bwNoise(rq + vec2(0.0, e)) - rh2) / e * 0.055 * near;
+  n.x += (bwNoise(rq + vec2(e, 0.0)) - rh2) / e * amp * 0.35;
+  n.z += (bwNoise(rq + vec2(0.0, e)) - rh2) / e * amp * 0.35;
 
   float gust = 0.0;
   for (int i = 0; i < 6; i++) {
