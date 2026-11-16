@@ -5,6 +5,7 @@ export default defineConfig({
   timeout: 90_000,
   outputDir: 'test-results',
   fullyParallel: false,
+  workers: 1,
   retries: 0,
   use: {
     baseURL: 'http://127.0.0.1:8735',

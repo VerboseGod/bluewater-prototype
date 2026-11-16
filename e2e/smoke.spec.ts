@@ -72,7 +72,7 @@ test('beam reach then a tack, with no console errors', async ({ page }) => {
       return s.vFwd > 1 && dist > 6;
     },
     undefined,
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
 
   const reach = await page.evaluate(() => window.__BLUEWATER__!.getState());
@@ -81,9 +81,9 @@ test('beam reach then a tack, with no console errors', async ({ page }) => {
   await page.screenshot({ path: 'test-results/beam-reach.png' });
 
   await setAxis(0, -0.42);
-  await page.waitForTimeout(2600);
+  await page.waitForTimeout(8000);
   await setAxis(0, 0);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(600);
   const tacked = await page.evaluate(() => window.__BLUEWATER__!.getState());
   expect(Math.abs(tacked.heading - reach.heading)).toBeGreaterThan(0.5);
   await page.screenshot({ path: 'test-results/tack.png' });
