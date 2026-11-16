@@ -6,23 +6,34 @@ import {
   Color,
   CylinderGeometry,
   DoubleSide,
+  ExtrudeGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
+  MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Shape,
   SphereGeometry,
+  SRGBColorSpace,
   Vector3,
 } from 'three';
 import type { SimSnapshot } from '../sim/sim';
 import { tillerYaw } from './tiller';
 
-const HULL = new Color('#f4f1ea');
-const DECK = new Color('#efeae2');
-const STRIPE = new Color('#c44536');
-const METAL = new Color('#c5ccd4');
-const SAIL = new Color('#f7f3ea');
-const WOOD = new Color('#8a5a32');
+const HULL = new Color('#f5f7f8');
+const DECK = new Color('#ebe6dc');
+const COCKPIT = new Color('#c5ced4');
+const RAIL = new Color('#d6453a');
+const METAL = new Color('#d5dbe2');
+const WOOD = new Color('#8d5a34');
+const SUIT = new Color('#1a2330');
+const VEST = new Color('#f0c14a');
+const SKIN = new Color('#e2b89a');
 
+/**
+ * Procedural ILCA-style dinghy. Original geometry written for this project;
+ * no third-party mesh.
+ */
 export class DinghyView {
   readonly group = new Group();
   private sail: Mesh;
@@ -30,83 +41,100 @@ export class DinghyView {
   private boom: Group;
   private rudder: Group;
   private sailor: Group;
+  private torso: Group;
   private telltales: Mesh[] = [];
-  private readonly cols = 8;
-  private readonly rows = 6;
+  private contact: Mesh;
+  private readonly cols = 12;
+  private readonly rows = 16;
 
   constructor() {
-    this.group.add(this.hullMesh());
-    this.group.add(this.deckMesh());
-    this.group.add(centerboard());
+    const hull = this.hullMesh();
+    hull.castShadow = true;
+    hull.receiveShadow = true;
+    this.group.add(hull);
+    const deck = this.deckMesh();
+    deck.castShadow = true;
+    deck.receiveShadow = true;
+    this.group.add(deck);
+    this.group.add(cockpit());
+    this.group.add(daggerboard());
+
     const mast = new Mesh(
-      new CylinderGeometry(0.035, 0.045, 5.15, 8),
-      new MeshStandardMaterial({ color: METAL, roughness: 0.35, metalness: 0.6 }),
+      new CylinderGeometry(0.028, 0.042, 4.7, 10),
+      new MeshStandardMaterial({ color: METAL, roughness: 0.32, metalness: 0.72 }),
     );
-    mast.position.set(0.2, 2.7, 0);
+    mast.position.set(0.95, 2.75, 0);
+    mast.castShadow = true;
     this.group.add(mast);
 
     this.boom = new Group();
     const boomMesh = new Mesh(
-      new CylinderGeometry(0.025, 0.03, 2.25, 6),
-      new MeshStandardMaterial({ color: METAL, roughness: 0.4, metalness: 0.5 }),
+      new CylinderGeometry(0.022, 0.028, 2.35, 8),
+      new MeshStandardMaterial({ color: METAL, roughness: 0.38, metalness: 0.6 }),
     );
     boomMesh.rotation.z = Math.PI / 2;
-    boomMesh.position.set(-1.05, 0, 0);
-    this.boom.add(boomMesh);
-    this.boom.position.set(0.2, 0.62, 0);
+    boomMesh.position.set(-1.15, 0, 0);
+    boomMesh.castShadow = true;
+    const vang = new Mesh(
+      new CylinderGeometry(0.012, 0.012, 0.7, 5),
+      new MeshStandardMaterial({ color: METAL, roughness: 0.4, metalness: 0.5 }),
+    );
+    vang.position.set(-0.45, -0.28, 0);
+    vang.rotation.z = 0.55;
+    this.boom.add(boomMesh, vang);
+    this.boom.position.set(0.95, 0.86, 0);
     this.group.add(this.boom);
 
     this.sailGeo = sailGeometry(this.cols, this.rows);
     this.sail = new Mesh(
       this.sailGeo,
-      new MeshStandardMaterial({ color: SAIL, roughness: 0.7, metalness: 0, emissive: '#3a2a21', emissiveIntensity: 0.25, side: DoubleSide }),
+      new MeshStandardMaterial({
+        map: sailCloth(),
+        color: '#f7f4ee',
+        roughness: 0.86,
+        metalness: 0,
+        side: DoubleSide,
+        envMapIntensity: 0.18,
+      }),
     );
+    this.sail.castShadow = true;
     this.group.add(this.sail);
     this.telltales = makeTelltales(this.sail);
-    this.sailor = makeSailor();
+
+    const sailor = makeSailor();
+    this.sailor = sailor.root;
+    this.torso = sailor.torso;
     this.group.add(this.sailor);
 
     this.rudder = new Group();
-    const blade = new Mesh(
-      new CylinderGeometry(0.012, 0.012, 0.72, 4),
-      new MeshStandardMaterial({ color: WOOD, roughness: 0.6 }),
-    );
-    blade.scale.set(1, 1, 3.2);
-    blade.position.y = -0.28;
-    const tiller = new Mesh(
-      new CylinderGeometry(0.015, 0.015, 0.85, 5),
-      new MeshStandardMaterial({ color: WOOD, roughness: 0.55 }),
-    );
-    tiller.rotation.z = Math.PI / 2;
-    tiller.position.set(0.38, 0.18, 0);
-    this.rudder.add(blade, tiller);
-    this.rudder.position.set(-1.95, 0.28, 0);
+    this.rudder.add(rudderBlade(), tiller(), hikingStick());
+    this.rudder.position.set(-2.02, 0.32, 0);
     this.group.add(this.rudder);
 
-    const shadow = new Mesh(
-      new CircleGeometry(1.15, 16),
-      new MeshBasicMaterial({
-        map: shadowTexture(),
-        transparent: true,
-        depthWrite: false,
-      }),
+    this.contact = new Mesh(
+      new CircleGeometry(1.25, 20),
+      new MeshBasicMaterial({ map: shadowTexture(), transparent: true, depthWrite: false }),
     );
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = -0.18;
-    shadow.name = 'shadow';
-    this.group.add(shadow);
+    this.contact.rotation.x = -Math.PI / 2;
+    this.contact.position.y = -0.05;
+    this.contact.renderOrder = 1;
+    this.group.add(this.contact);
 
     const vane = new Mesh(
-      new CylinderGeometry(0.012, 0.04, 0.42, 4),
+      new CylinderGeometry(0.01, 0.035, 0.38, 4),
       new MeshStandardMaterial({ color: '#ff4d3a', roughness: 0.4 }),
     );
     vane.rotation.z = Math.PI / 2;
-    vane.position.set(-0.16, 0, 0);
+    vane.position.set(-0.14, 0, 0);
     const vanePivot = new Group();
     vanePivot.name = 'windex';
-    vanePivot.position.set(0.05, 5.35, 0);
+    vanePivot.position.set(0.9, 5.18, 0);
     vanePivot.add(vane);
     this.group.add(vanePivot);
+  }
+
+  setContactShadow(on: boolean): void {
+    this.contact.visible = on;
   }
 
   update(s: SimSnapshot, rudderCmd: number): void {
@@ -116,37 +144,49 @@ export class DinghyView {
     const windex = this.group.getObjectByName('windex');
     if (windex) {
       const target = -s.awa;
-      windex.rotation.y += (target - windex.rotation.y) * 0.12;
+      let d = target - windex.rotation.y;
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      windex.rotation.y += d * 0.12;
     }
-    const windward = Math.sign(s.awa || s.twa || 1);
+    const windward = Math.sign(s.awa || s.twa || 1) || 1;
     const hike = s.hike;
-    this.sailor.position.set(-0.35, 0.55, windward * (0.05 + hike * 0.72));
-    this.sailor.rotation.x = 0;
-    this.sailor.rotation.z = -windward * hike * 0.5;
+    this.sailor.position.set(-0.15, 0.42, windward * (0.06 + hike * 0.82));
+    this.sailor.rotation.z = -windward * hike * 0.95;
+    this.torso.rotation.z = -windward * hike * 0.28;
     this.sailor.visible = !s.capsized;
   }
 
   private shapeSail(s: SimSnapshot): void {
     const pos = this.sailGeo.getAttribute('position') as BufferAttribute;
     const boom = s.boom;
-    const clew = new Vector3(0.2 - Math.cos(boom) * 2.2, 0.62, -Math.sin(boom) * 2.2);
-    const head = new Vector3(0.05, 5.2, 0);
-    const tack = new Vector3(0.2, 0.62, 0);
-    const powered = s.sail === 'trimmed' ? 1 : s.sail === 'stalled' ? 0.45 : 0.05;
-    const flutter = s.sail === 'luffing' || s.sail === 'aback' || s.sail === 'stalled' ? 1 : 0.15;
-    const t = s.time;
+    const mastX = 0.95;
+    const tack = new Vector3(mastX, 0.86, 0);
+    const head = new Vector3(mastX - 0.06, 5.15, 0);
+    const foot = 2.32;
+    const clew = new Vector3(mastX - Math.cos(boom) * foot, 0.86, -Math.sin(boom) * foot);
+    const fill = s.sail === 'trimmed' ? 1 : s.sail === 'stalled' ? 0.48 : s.sail === 'aback' ? 0.12 : 0.05;
+    const camber = (0.1 + 0.34 * (1 - Math.min(1, s.sheet))) * fill;
+    const luff = s.sail === 'luffing' || s.sail === 'aback' ? 1 : s.sail === 'stalled' ? 0.4 : 0.06;
+    const side = -Math.sign(boom || s.awa || 1);
+    const chord = clew.clone().sub(tack);
+    chord.y = 0;
+    if (chord.lengthSq() > 1e-6) chord.normalize();
     let n = 0;
     for (let r = 0; r <= this.rows; r++) {
       const v = r / this.rows;
       for (let c = 0; c <= this.cols; c++) {
         const u = c / this.cols;
-        const foot = tack.clone().lerp(clew, u);
-        const leechTop = head;
-        const p = foot.clone().lerp(leechTop, v);
-        const belly = Math.sin(Math.PI * u) * Math.sin(Math.PI * v) * 0.28 * powered;
-        const side = -Math.sign(boom || s.awa || 1);
-        p.z += side * belly;
-        p.x += Math.sin(t * 9 + v * 6 + u * 4) * 0.045 * flutter * (0.3 + v);
+        const footP = tack.clone().lerp(clew, u);
+        const p = footP.clone().lerp(head, v);
+        const draft = Math.sin(Math.PI * Math.pow(u, 0.8)) * Math.sin(Math.PI * v);
+        p.z += side * draft * camber * (0.45 + 0.55 * (1 - v * 0.65));
+        p.addScaledVector(chord, Math.sin(Math.PI * v) * u * u * 0.1);
+        const luffW = Math.exp(-u * 6.0) * (0.2 + 0.8 * v);
+        const flutter = Math.sin(s.time * 15 + v * 10 + u * 4) * 0.065 * luff * luffW;
+        const flutter2 = Math.sin(s.time * 22 + v * 16) * 0.028 * luff * luffW;
+        p.z += flutter;
+        p.x += flutter2;
         pos.setXYZ(n, p.x, p.y, p.z);
         n++;
       }
@@ -157,88 +197,109 @@ export class DinghyView {
   }
 
   private placeTelltales(s: SimSnapshot, tack: Vector3, clew: Vector3, head: Vector3): void {
-    const spots = [0.25, 0.5, 0.75];
-    const aoa = s.aoa;
-    const windwardLift = aoa < 0.14 ? 0.8 : 0.05;
-    const leewardLift = aoa > 0.46 ? 0.8 : 0.05;
-    const flutter = (s.sail === 'luffing' || s.sail === 'stalled' ? 1 : 0.2) * Math.sin(s.time * 18);
+    const spots = [0.28, 0.48, 0.68];
+    const windwardLift = s.aoa < 0.14 ? 0.85 : 0.05;
+    const leewardLift = s.aoa > 0.46 ? 0.85 : 0.05;
+    const flutter = (s.sail === 'luffing' || s.sail === 'stalled' ? 1 : 0.15) * Math.sin(s.time * 16);
+    const side = -Math.sign(s.boom || s.awa || 1);
     spots.forEach((v, i) => {
-      const foot = tack.clone().lerp(clew, 0.72);
+      const foot = tack.clone().lerp(clew, 0.18);
       const p = foot.clone().lerp(head, v);
       const wind = this.telltales[i * 2];
       const lee = this.telltales[i * 2 + 1];
-      const side = -Math.sign(s.boom || s.awa || 1);
-      wind.position.copy(p).add(new Vector3(-0.05, 0, side * 0.06));
-      lee.position.copy(p).add(new Vector3(-0.05, 0, -side * 0.06));
-      wind.rotation.z = -0.4 - windwardLift * 1.1 + flutter * windwardLift;
-      lee.rotation.z = -0.4 - leewardLift * 1.1 - flutter * leewardLift;
+      wind.position.copy(p).add(new Vector3(-0.02, 0, side * 0.05));
+      lee.position.copy(p).add(new Vector3(-0.02, 0, -side * 0.05));
+      wind.rotation.z = -0.35 - windwardLift * 1.15 + flutter * windwardLift;
+      lee.rotation.z = -0.35 - leewardLift * 1.15 - flutter * leewardLift;
     });
   }
 
   private hullMesh(): Mesh {
     const stations = [
-      { x: 2.15, beam: 0.02, deck: 0.2, keel: 0.06 },
-      { x: 1.75, beam: 0.22, deck: 0.32, keel: 0.0 },
-      { x: 1.15, beam: 0.48, deck: 0.38, keel: -0.08 },
-      { x: 0.4, beam: 0.64, deck: 0.4, keel: -0.12 },
-      { x: -0.35, beam: 0.66, deck: 0.39, keel: -0.1 },
-      { x: -1.05, beam: 0.55, deck: 0.36, keel: -0.04 },
-      { x: -1.65, beam: 0.36, deck: 0.32, keel: 0.04 },
-      { x: -2.1, beam: 0.14, deck: 0.26, keel: 0.1 },
+      { x: 2.12, beam: 0.015, deck: 0.3, keel: 0.16 },
+      { x: 1.82, beam: 0.18, deck: 0.38, keel: 0.05 },
+      { x: 1.45, beam: 0.38, deck: 0.42, keel: -0.02 },
+      { x: 1.05, beam: 0.54, deck: 0.43, keel: -0.08 },
+      { x: 0.6, beam: 0.64, deck: 0.41, keel: -0.12 },
+      { x: 0.1, beam: 0.68, deck: 0.39, keel: -0.135 },
+      { x: -0.4, beam: 0.66, deck: 0.37, keel: -0.12 },
+      { x: -0.9, beam: 0.56, deck: 0.35, keel: -0.06 },
+      { x: -1.35, beam: 0.5, deck: 0.34, keel: -0.01 },
+      { x: -1.75, beam: 0.46, deck: 0.33, keel: 0.02 },
+      { x: -2.12, beam: 0.4, deck: 0.32, keel: 0.05 },
     ];
-    const rings: Vector3[][] = stations.map((s) => {
-      const b = s.beam;
-      return [
-        new Vector3(s.x, s.keel, 0),
-        new Vector3(s.x, s.keel + 0.04, -b * 0.55),
-        new Vector3(s.x, s.deck * 0.45, -b),
-        new Vector3(s.x, s.deck, -b * 0.72),
-        new Vector3(s.x, s.deck, b * 0.72),
-        new Vector3(s.x, s.deck * 0.45, b),
-        new Vector3(s.x, s.keel + 0.04, b * 0.55),
-      ];
-    });
+    const rings = stations.map((s) => section(s.x, s.beam, s.keel, s.deck));
     const geo = stitch(rings);
-    const mat = new MeshStandardMaterial({ color: HULL, roughness: 0.62, metalness: 0.02 });
-    const mesh = new Mesh(geo, mat);
-    const stripe = new Mesh(
-      new CylinderGeometry(0.02, 0.02, 3.4, 5),
-      new MeshStandardMaterial({ color: STRIPE, roughness: 0.5 }),
+    const mesh = new Mesh(
+      geo,
+      new MeshPhysicalMaterial({
+        color: HULL,
+        roughness: 0.36,
+        metalness: 0.02,
+        clearcoat: 0.62,
+        clearcoatRoughness: 0.16,
+        envMapIntensity: 0.9,
+      }),
     );
-    stripe.rotation.z = Math.PI / 2;
-    stripe.position.set(0, 0.34, 0.62);
-    mesh.add(stripe);
-    const stripe2 = stripe.clone();
-    stripe2.position.z = -0.62;
-    mesh.add(stripe2);
+    mesh.add(rubRail(stations, 1), rubRail(stations, -1));
     return mesh;
   }
 
   private deckMesh(): Mesh {
     const geo = new BufferGeometry();
     const positions = new Float32Array([
-      1.7, 0.36, 0,
-      0.4, 0.42, -0.42,
-      0.4, 0.42, 0.42,
-      -1.5, 0.34, -0.28,
-      -1.5, 0.34, 0.28,
-      -0.2, 0.4, 0,
+      1.9, 0.4, 0,
+      1.15, 0.44, -0.36,
+      1.15, 0.44, 0.36,
+      0.35, 0.42, -0.42,
+      0.35, 0.42, 0.42,
+      -1.55, 0.36, -0.22,
+      -1.55, 0.36, 0.22,
+      -0.15, 0.4, 0,
     ]);
-    const indices = [0, 1, 2, 1, 3, 5, 2, 5, 4, 1, 5, 2, 3, 4, 5];
+    const indices = [
+      0, 1, 2,
+      1, 3, 7,
+      2, 7, 4,
+      1, 7, 2,
+      3, 5, 7,
+      4, 7, 6,
+    ];
     geo.setAttribute('position', new BufferAttribute(positions, 3));
     geo.setIndex(indices);
     geo.computeVertexNormals();
-    return new Mesh(geo, new MeshStandardMaterial({ color: DECK, roughness: 0.7 }));
+    return new Mesh(
+      geo,
+      new MeshStandardMaterial({ color: DECK, roughness: 0.72, metalness: 0, envMapIntensity: 0.25 }),
+    );
   }
+}
+
+function section(x: number, beam: number, keel: number, deck: number): Vector3[] {
+  const b = Math.max(beam, 0.012);
+  const bilge = keel + (deck - keel) * 0.42;
+  return [
+    new Vector3(x, keel, 0),
+    new Vector3(x, keel + 0.02, -b * 0.42),
+    new Vector3(x, bilge * 0.65 + keel * 0.35, -b * 0.82),
+    new Vector3(x, bilge, -b),
+    new Vector3(x, deck * 0.72 + bilge * 0.28, -b * 0.94),
+    new Vector3(x, deck, -b * 0.7),
+    new Vector3(x, deck + 0.018, -b * 0.22),
+    new Vector3(x, deck + 0.018, b * 0.22),
+    new Vector3(x, deck, b * 0.7),
+    new Vector3(x, deck * 0.72 + bilge * 0.28, b * 0.94),
+    new Vector3(x, bilge, b),
+    new Vector3(x, bilge * 0.65 + keel * 0.35, b * 0.82),
+    new Vector3(x, keel + 0.02, b * 0.42),
+  ];
 }
 
 function stitch(rings: Vector3[][]): BufferGeometry {
   const positions: number[] = [];
   const indices: number[] = [];
   const cols = rings[0].length;
-  rings.forEach((ring) => {
-    ring.forEach((p) => positions.push(p.x, p.y, p.z));
-  });
+  rings.forEach((ring) => ring.forEach((p) => positions.push(p.x, p.y, p.z)));
   for (let i = 0; i < rings.length - 1; i++) {
     for (let j = 0; j < cols; j++) {
       const a = i * cols + j;
@@ -259,34 +320,172 @@ function stitch(rings: Vector3[][]): BufferGeometry {
   return geo;
 }
 
-function centerboard(): Mesh {
+function rubRail(stations: { x: number; beam: number; deck: number }[], side: number): Mesh {
+  const geo = new BufferGeometry();
+  const positions: number[] = [];
+  const indices: number[] = [];
+  stations.forEach((s, i) => {
+    const y = s.deck * 0.78;
+    const z = side * s.beam * 0.98;
+    positions.push(s.x, y, z, s.x, y + 0.025, z + side * 0.01);
+    if (i > 0) {
+      const a = (i - 1) * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  });
+  geo.setAttribute('position', new BufferAttribute(new Float32Array(positions), 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return new Mesh(geo, new MeshStandardMaterial({ color: RAIL, roughness: 0.5 }));
+}
+
+function cockpit(): Mesh {
   const geo = new BufferGeometry();
   geo.setAttribute(
     'position',
     new BufferAttribute(new Float32Array([
-      0.15, -0.05, 0,
-      -0.55, -0.05, 0,
-      -0.15, -0.72, 0,
+      0.15, 0.4, -0.28,
+      0.15, 0.4, 0.28,
+      -1.15, 0.36, -0.22,
+      -1.15, 0.36, 0.22,
+      0.05, 0.3, -0.18,
+      0.05, 0.3, 0.18,
+      -1.0, 0.28, -0.14,
+      -1.0, 0.28, 0.14,
     ]), 3),
   );
-  geo.setIndex([0, 1, 2]);
+  geo.setIndex([
+    0, 4, 1, 1, 4, 5,
+    1, 5, 3, 3, 5, 7,
+    3, 7, 2, 2, 7, 6,
+    2, 6, 0, 0, 6, 4,
+    4, 6, 5, 5, 6, 7,
+  ]);
   geo.computeVertexNormals();
-  return new Mesh(geo, new MeshStandardMaterial({ color: '#d7dde4', side: DoubleSide, roughness: 0.4, metalness: 0.2 }));
+  return new Mesh(geo, new MeshStandardMaterial({ color: COCKPIT, roughness: 0.92 }));
+}
+
+function daggerboard(): Mesh {
+  const shape = new Shape();
+  shape.moveTo(0.2, -0.02);
+  shape.lineTo(-0.32, -0.02);
+  shape.quadraticCurveTo(-0.5, -0.4, -0.12, -0.86);
+  shape.lineTo(0.06, -0.5);
+  shape.closePath();
+  const geo = new ExtrudeGeometry(shape, {
+    depth: 0.03,
+    bevelEnabled: true,
+    bevelSize: 0.006,
+    bevelThickness: 0.004,
+    bevelSegments: 1,
+  });
+  geo.translate(0.15, 0, -0.015);
+  const mesh = new Mesh(
+    geo,
+    new MeshStandardMaterial({ color: '#e4e8ee', roughness: 0.35, metalness: 0.25, side: DoubleSide }),
+  );
+  return mesh;
+}
+
+function rudderBlade(): Mesh {
+  const shape = new Shape();
+  shape.moveTo(0.05, 0.05);
+  shape.lineTo(-0.06, 0.05);
+  shape.lineTo(-0.08, -0.55);
+  shape.lineTo(0.02, -0.48);
+  shape.closePath();
+  const geo = new ExtrudeGeometry(shape, { depth: 0.018, bevelEnabled: false });
+  geo.translate(0, 0, -0.009);
+  return new Mesh(geo, new MeshStandardMaterial({ color: WOOD, roughness: 0.55, side: DoubleSide }));
+}
+
+function tiller(): Mesh {
+  const mesh = new Mesh(
+    new CylinderGeometry(0.016, 0.016, 0.78, 6),
+    new MeshStandardMaterial({ color: WOOD, roughness: 0.5 }),
+  );
+  mesh.rotation.z = Math.PI / 2;
+  mesh.position.set(0.36, 0.16, 0);
+  return mesh;
+}
+
+function hikingStick(): Mesh {
+  const mesh = new Mesh(
+    new CylinderGeometry(0.01, 0.01, 0.95, 5),
+    new MeshStandardMaterial({ color: WOOD, roughness: 0.5 }),
+  );
+  mesh.rotation.z = 1.05;
+  mesh.position.set(0.78, 0.42, 0);
+  return mesh;
 }
 
 function sailGeometry(cols: number, rows: number): BufferGeometry {
   const geo = new BufferGeometry();
   const count = (cols + 1) * (rows + 1);
   geo.setAttribute('position', new BufferAttribute(new Float32Array(count * 3), 3));
+  const uv = new Float32Array(count * 2);
+  let n = 0;
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      uv[n * 2] = c / cols;
+      uv[n * 2 + 1] = r / rows;
+      n++;
+    }
+  }
+  geo.setAttribute('uv', new BufferAttribute(uv, 2));
   const indices: number[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const a = r * (cols + 1) + c;
-      indices.push(a, a + 1, a + cols + 1, a + 1, a + cols + 2, a + cols + 1);
+      indices.push(a, a + cols + 1, a + 1, a + 1, a + cols + 1, a + cols + 2);
     }
   }
   geo.setIndex(indices);
   return geo;
+}
+
+function sailCloth(): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 512;
+  const g = c.getContext('2d');
+  if (!g) {
+    const tex = new CanvasTexture(c);
+    tex.colorSpace = SRGBColorSpace;
+    return tex;
+  }
+  g.fillStyle = '#f4f0e6';
+  g.fillRect(0, 0, 512, 512);
+  const cloth = g.createLinearGradient(0, 0, 512, 512);
+  cloth.addColorStop(0, 'rgba(255,255,255,0.35)');
+  cloth.addColorStop(1, 'rgba(180,170,150,0.18)');
+  g.fillStyle = cloth;
+  g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = 'rgba(60,50,40,0.08)';
+  g.lineWidth = 2;
+  for (let y = 40; y < 512; y += 46) {
+    g.beginPath();
+    g.moveTo(0, y);
+    g.lineTo(512, y + 8);
+    g.stroke();
+  }
+  g.fillStyle = 'rgba(150, 196, 206, 0.55)';
+  g.fillRect(250, 250, 120, 78);
+  g.strokeStyle = 'rgba(40,40,40,0.25)';
+  g.strokeRect(250, 250, 120, 78);
+  g.fillStyle = '#c4372f';
+  g.beginPath();
+  g.arc(120, 300, 36, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#f4f0e6';
+  g.font = 'bold 54px sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText('7', 120, 302);
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
 }
 
 function makeTelltales(parent: Mesh): Mesh[] {
@@ -295,7 +494,7 @@ function makeTelltales(parent: Mesh): Mesh[] {
     const geo = new BufferGeometry();
     geo.setAttribute(
       'position',
-      new BufferAttribute(new Float32Array([0, 0, 0, 0.22, 0.02, 0, 0.22, -0.02, 0]), 3),
+      new BufferAttribute(new Float32Array([0, 0, 0, 0.18, 0.015, 0, 0.18, -0.015, 0]), 3),
     );
     geo.setIndex([0, 1, 2]);
     geo.computeVertexNormals();
@@ -307,35 +506,63 @@ function makeTelltales(parent: Mesh): Mesh[] {
   return list;
 }
 
-function makeSailor(): Group {
-  const g = new Group();
-  const suit = new MeshStandardMaterial({ color: '#1c2430', roughness: 0.8 });
-  const vest = new MeshStandardMaterial({ color: '#f2c14e', roughness: 0.6 });
-  const torso = new Mesh(new CylinderGeometry(0.11, 0.13, 0.42, 8), suit);
-  torso.position.y = 0.42;
-  const life = new Mesh(new CylinderGeometry(0.13, 0.15, 0.28, 8), vest);
-  life.position.y = 0.48;
-  const head = new Mesh(new SphereGeometry(0.1, 8, 8), new MeshStandardMaterial({ color: '#e6c2a2', roughness: 0.7 }));
-  head.position.y = 0.74;
-  const leg = new Mesh(new CylinderGeometry(0.045, 0.05, 0.4, 6), suit);
-  leg.position.set(0.08, 0.12, 0.05);
-  leg.rotation.z = 0.5;
-  const leg2 = leg.clone();
-  leg2.position.z = -0.05;
-  g.add(torso, life, head, leg, leg2);
-  return g;
+function makeSailor(): { root: Group; torso: Group } {
+  const root = new Group();
+  const suit = new MeshStandardMaterial({ color: SUIT, roughness: 0.8 });
+  const vestMat = new MeshStandardMaterial({ color: VEST, roughness: 0.55 });
+  const skin = new MeshStandardMaterial({ color: SKIN, roughness: 0.7 });
+
+  const thigh = (z: number) => {
+    const m = new Mesh(new CylinderGeometry(0.05, 0.045, 0.36, 6), suit);
+    m.position.set(0.12, 0.16, z);
+    m.rotation.z = 1.15;
+    m.castShadow = true;
+    return m;
+  };
+  const shin = (z: number) => {
+    const m = new Mesh(new CylinderGeometry(0.04, 0.038, 0.32, 6), suit);
+    m.position.set(0.32, 0.08, z);
+    m.rotation.z = 0.15;
+    m.castShadow = true;
+    return m;
+  };
+  root.add(thigh(0.07), thigh(-0.07), shin(0.08), shin(-0.08));
+
+  const torso = new Group();
+  const chest = new Mesh(new CylinderGeometry(0.11, 0.13, 0.4, 8), suit);
+  chest.position.y = 0.22;
+  chest.castShadow = true;
+  const vest = new Mesh(new CylinderGeometry(0.125, 0.145, 0.28, 8), vestMat);
+  vest.position.y = 0.26;
+  const head = new Mesh(new SphereGeometry(0.1, 10, 8), skin);
+  head.position.y = 0.52;
+  head.castShadow = true;
+  const cap = new Mesh(new SphereGeometry(0.105, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), vestMat);
+  cap.position.y = 0.54;
+  const brim = new Mesh(new CylinderGeometry(0.12, 0.12, 0.02, 8), vestMat);
+  brim.position.set(0.06, 0.5, 0);
+  const arm = new Mesh(new CylinderGeometry(0.035, 0.032, 0.36, 6), suit);
+  arm.position.set(0.16, 0.18, 0.14);
+  arm.rotation.z = 0.8;
+  const arm2 = arm.clone();
+  arm2.position.z = -0.16;
+  torso.add(chest, vest, head, cap, brim, arm, arm2);
+  torso.position.y = 0.28;
+  root.add(torso);
+  return { root, torso };
 }
 
 function shadowTexture(): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
-  const g = c.getContext('2d')!;
-  const grad = g.createRadialGradient(32, 32, 4, 32, 32, 32);
-  grad.addColorStop(0, 'rgba(0,0,0,0.35)');
-  grad.addColorStop(1, 'rgba(0,0,0,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 64, 64);
-  const tex = new CanvasTexture(c);
-  return tex;
+  const g = c.getContext('2d');
+  if (g) {
+    const grad = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+    grad.addColorStop(0, 'rgba(0,0,0,0.28)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 64, 64);
+  }
+  return new CanvasTexture(c);
 }

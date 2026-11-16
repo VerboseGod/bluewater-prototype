@@ -48,7 +48,7 @@ export class Hud {
           </div>
           <div class="badges">
             <button class="ghost" id="mode" type="button">Assisted</button>
-            <button class="ghost" id="quality" type="button">Performance</button>
+            <button class="ghost" id="quality" type="button">Low</button>
             <button class="ghost" id="pause" type="button">Debrief</button>
             <div class="badge" id="link">Keyboard</div>
             <div class="muted" id="fps">-- fps</div>
@@ -67,7 +67,7 @@ export class Hud {
             <div class="state-word" id="heelword">Flat</div>
           </div>
         </div>
-        <div class="legend">Left stick steers the bow · A hike · B training aids · D-pad camera · View reset · Menu debrief · X quality</div>
+        <div class="legend">Stick steers the bow · triggers sheet · A hike · B aids · V cinematic · View reset · Menu debrief · X low/high</div>
       </div>
       <div class="debrief hidden" id="debrief">
         <div class="card">
@@ -117,7 +117,7 @@ export class Hud {
   }
 
   setFps(fps: number): void {
-    this.fps.textContent = `${Math.round(fps)} fps`;
+    this.fps.textContent = fps > 0 ? `${Math.round(fps)} fps` : '';
   }
 
   render(sim: Simulation, hint: string, urgent: boolean, quality: string): void {
@@ -133,7 +133,7 @@ export class Hud {
     this.dial.style.display = 'block';
     this.modeBtn.textContent = sim.assisted ? 'Assisted' : 'Full manual';
     this.modeBtn.classList.toggle('on', sim.assisted);
-    this.qualityBtn.textContent = quality === 'quality' ? 'Quality' : 'Performance';
+    this.qualityBtn.textContent = quality === 'high' ? 'High' : 'Low';
     this.link.textContent = s.gust > 1.12 ? 'Gust' : 'Steady';
     const sheetPct = s.sheet * 100;
     this.sheetFill.style.width = `${sheetPct}%`;
@@ -160,7 +160,7 @@ export class Hud {
     const w = this.trackCanvas.width;
     const h = this.trackCanvas.height;
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = '#082833';
+    ctx.fillStyle = '#0c2430';
     ctx.fillRect(0, 0, w, h);
     const pts = sim.track.filter((p) => Number.isFinite(p.x));
     const bounds = boundsOf(pts, sim.x, sim.y);
@@ -227,7 +227,7 @@ export class Hud {
       .join('');
     const note = this.root.querySelector('#debriefnote')!;
     note.textContent = sim.assisted
-      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red wedge is an approximate no-go guide. The boat can still sail wherever the forces allow. D-pad left/right or G changes graphics quality.'
+      ? 'Assisted: the amber mark on the sheet bar is a trim suggestion, and the red arc is an approximate no-go guide. The boat can still sail wherever the forces allow. X or G switches Low and High graphics.'
       : 'Full manual: no sheet coach and no no-go wedge. Capsize and stall are less forgiving. Menu resumes.';
   }
 }

@@ -9,7 +9,7 @@ export interface InputState {
   resetPressed: boolean;
   pausePressed: boolean;
   qualityPressed: boolean;
-  camera: 'chase' | 'cockpit' | 'top' | null;
+  camera: 'chase' | 'cockpit' | 'top' | 'cinema' | null;
   cycleCamera: boolean;
   usingGamepad: boolean;
 }
@@ -122,6 +122,7 @@ function consumeCamera(): InputState['camera'] {
   if (consumeKey('Digit1')) return 'chase';
   if (consumeKey('Digit2')) return 'cockpit';
   if (consumeKey('Digit3')) return 'top';
+  if (consumeKey('Digit4') || consumeKey('KeyV')) return 'cinema';
   return null;
 }
 

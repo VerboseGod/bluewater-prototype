@@ -12,10 +12,18 @@ declare global {
   interface Window {
     __BLUEWATER__?: {
       getState: () => SimSnapshot;
+      frame: number;
+      ack: number;
+      bench: { fps: number; ms: number; quality: string } | null;
+      demoPhase: string;
     };
   }
 }
 
 window.__BLUEWATER__ = {
   getState: () => game.state(),
+  frame: 0,
+  ack: 0,
+  bench: null,
+  demoPhase: '',
 };

@@ -1,142 +1,442 @@
 import {
   Color,
+  CubeTexture,
   DoubleSide,
   Mesh,
   PlaneGeometry,
   ShaderMaterial,
+  Vector2,
   Vector3,
   Vector4,
 } from 'three';
 import { WAVES } from '../sim/water';
 import type { Gust } from '../sim/wind';
+import { buildGerstner, gerstnerAt, waveCountFor, type GerstnerWave } from './waves';
 
 const VERT = /* glsl */ `
 uniform float uTime;
-uniform int uWaves;
-uniform vec4 uWaveA[4];
-uniform vec4 uWaveB[4];
+uniform int uCount;
+uniform vec4 uA[8];
+uniform vec4 uB[8];
+uniform int uPhys;
+uniform vec4 uPhysA[4];
+uniform vec4 uPhysB[4];
+
 varying vec3 vWorld;
+varying vec3 vNormal;
 varying float vHeight;
+varying float vFoam;
+varying float vFogDepth;
 
-float omega(float k, float speed) {
-  return sqrt(9.81 * k) * 0.55 + speed * 0.15;
-}
-
-float heightAt(vec2 p) {
-  float h = 0.0;
-  for (int i = 0; i < 4; i++) {
-    float use = float(i < uWaves);
-    float k = 6.2831853 / max(uWaveA[i].w, 0.001);
-    float ph = k * dot(uWaveA[i].xy, p) + uWaveB[i].z - omega(k, uWaveB[i].y) * uTime;
-    h += use * uWaveA[i].z * sin(ph);
+vec3 gerstner(vec2 p, out vec3 n, out float foam) {
+  vec3 disp = vec3(0.0);
+  n = vec3(0.0, 1.0, 0.0);
+  foam = 0.0;
+  float count = max(float(uCount), 1.0);
+  for (int i = 0; i < 8; i++) {
+    float use = float(i < uCount);
+    float k = 6.28318530718 / max(uA[i].w, 0.001);
+    float amp = uA[i].z;
+    float Q = uB[i].x / (k * max(amp, 0.0001) * count);
+    float ph = k * dot(uA[i].xy, p) + uB[i].z - uB[i].y * uTime;
+    float s = sin(ph);
+    float c = cos(ph);
+    disp.x += use * Q * amp * uA[i].x * c;
+    disp.z += use * Q * amp * uA[i].y * c;
+    disp.y += use * amp * s;
+    float wa = k * amp;
+    n.x -= use * uA[i].x * wa * c;
+    n.z -= use * uA[i].y * wa * c;
+    n.y -= use * Q * wa * s;
+    foam += use * Q * wa * s;
   }
-  return h;
+  for (int i = 0; i < 4; i++) {
+    float use = float(i < uPhys);
+    float k = 6.28318530718 / max(uPhysA[i].w, 0.001);
+    float omega = sqrt(9.81 * k) * 0.55 + uPhysB[i].y * 0.15;
+    float ph = k * dot(uPhysA[i].xy, p) + uPhysB[i].z - omega * uTime;
+    float s = sin(ph);
+    float c = cos(ph);
+    disp.y += use * uPhysA[i].z * s;
+    n.x -= use * uPhysA[i].x * k * uPhysA[i].z * c;
+    n.z -= use * uPhysA[i].y * k * uPhysA[i].z * c;
+  }
+  return disp;
 }
 
 void main() {
   vec4 world = modelMatrix * vec4(position, 1.0);
-  float h = heightAt(world.xz);
-  world.y += h;
+  vec3 n;
+  float foam;
+  vec3 d = gerstner(world.xz, n, foam);
+  world.x += d.x;
+  world.z += d.z;
+  world.y += d.y;
   vWorld = world.xyz;
-  vHeight = h;
-  gl_Position = projectionMatrix * viewMatrix * world;
+  vNormal = normalize(n);
+  vHeight = d.y;
+  vFoam = foam;
+  vec4 mv = viewMatrix * world;
+  vFogDepth = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+const FRAG_LOW = /* glsl */ `
+uniform vec3 uDeep;
+uniform vec3 uShallow;
+uniform vec3 uSun;
+uniform vec3 uHorizon;
+uniform vec2 uWind;
+uniform float uTime;
+uniform vec2 uBoat;
+uniform float uHeading;
+uniform float uSpeed;
+uniform int uGusts;
+uniform vec4 uGust[6];
+
+varying vec3 vWorld;
+varying vec3 vNormal;
+varying float vHeight;
+varying float vFoam;
+
+#include <fog_pars_fragment>
+
+void main() {
+  vec3 n = normalize(vNormal);
+  vec3 viewDir = normalize(cameraPosition - vWorld);
+  float ndotv = max(dot(n, viewDir), 0.0);
+  float fres = 0.02 + 0.98 * pow(1.0 - ndotv, 5.0);
+  vec3 R = reflect(-viewDir, n);
+  float skyH = clamp(R.y * 1.2, 0.0, 1.0);
+  vec3 sky = mix(uHorizon, vec3(0.16, 0.36, 0.66), pow(skyH, 0.6));
+  float sunDot = max(dot(R, uSun), 0.0);
+  sky += vec3(1.0, 0.96, 0.9) * pow(sunDot, 64.0) * 0.45;
+  float hMix = clamp(vHeight * 2.2 + 0.35, 0.0, 1.0);
+  vec3 water = mix(uDeep, uShallow, hMix);
+  vec3 col = mix(water, sky, fres);
+  vec3 H = normalize(uSun + viewDir);
+  col += vec3(1.0, 0.97, 0.9) * pow(max(dot(n, H), 0.0), 96.0) * 0.55;
+  vec2 rel = vWorld.xz - uBoat;
+  float c = cos(uHeading);
+  float s = sin(uHeading);
+  float fwd = rel.x * c + rel.y * s;
+  float side = -rel.x * s + rel.y * c;
+  float spd = clamp(uSpeed / 3.2, 0.0, 1.0);
+  float bow = smoothstep(0.8, 1.5, fwd) * (1.0 - smoothstep(1.7, 2.4, fwd));
+  bow *= 1.0 - smoothstep(0.15, 0.7, abs(side));
+  float behind = -fwd;
+  float keel = abs(abs(side) - behind * 0.2);
+  float trail = (1.0 - smoothstep(0.12, 0.7, keel)) * smoothstep(0.3, 1.4, behind) * (1.0 - smoothstep(7.0, 16.0, behind));
+  float crest = smoothstep(0.2, 0.5, vFoam);
+  col = mix(col, vec3(0.84, 0.92, 0.93), clamp(crest * 0.7 + (bow + trail) * spd, 0.0, 1.0) * 0.8);
+  float gust = 0.0;
+  for (int i = 0; i < 6; i++) {
+    float use = float(i < uGusts);
+    float d = distance(vWorld.xz, uGust[i].xy);
+    float radius = max(uGust[i].z, 0.001);
+    gust += use * (1.0 - smoothstep(radius * 0.2, radius, d)) * uGust[i].w;
+  }
+  col *= 1.0 - clamp(gust, 0.0, 1.0) * 0.28;
+  gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
 }
 `;
 
 const FRAG = /* glsl */ `
 uniform vec3 uDeep;
 uniform vec3 uShallow;
+uniform vec3 uScatter;
 uniform vec3 uSun;
 uniform vec3 uHorizon;
+uniform samplerCube uEnv;
+uniform vec2 uWind;
+uniform float uTime;
+uniform vec2 uBoat;
+uniform float uHeading;
+uniform float uSpeed;
+uniform int uWakeN;
+uniform vec4 uWake[8];
 uniform int uGusts;
 uniform vec4 uGust[6];
+uniform float uFoamScale;
+uniform float uEnvMix;
+
 varying vec3 vWorld;
+varying vec3 vNormal;
 varying float vHeight;
+varying float vFoam;
+
+#include <fog_pars_fragment>
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 
 void main() {
-  vec3 dx = dFdx(vWorld);
-  vec3 dy = dFdy(vWorld);
-  vec3 n = normalize(cross(dx, dy));
-  vec3 viewDir = normalize(cameraPosition - vWorld);
-  float fres = pow(1.0 - max(dot(n, viewDir), 0.0), 3.0);
-  float hMix = clamp(vHeight * 6.0 + 0.45, 0.0, 1.0);
-  vec3 col = mix(uDeep, uShallow, hMix);
-  col = mix(col, uHorizon, fres * 0.55);
-  vec3 halfV = normalize(uSun + viewDir);
-  float spec = pow(max(dot(n, halfV), 0.0), 90.0);
-  col += spec * vec3(1.0, 0.96, 0.88) * 0.85;
+  vec3 n = normalize(vNormal);
+  vec2 wind = uWind;
+  float wlen = length(wind);
+  vec2 wdir = wlen > 0.001 ? wind / wlen : vec2(1.0, 0.0);
+  vec2 wperp = vec2(-wdir.y, wdir.x);
+
+  float rip = sin(dot(vWorld.xz, wdir) * 1.8 + uTime * 2.6) * sin(dot(vWorld.xz, wperp) * 2.4 - uTime * 1.7);
+  n.x += wdir.x * rip * 0.07;
+  n.z += wdir.y * rip * 0.07;
+
   float gust = 0.0;
   for (int i = 0; i < 6; i++) {
     float use = float(i < uGusts);
     float d = distance(vWorld.xz, uGust[i].xy);
     float radius = max(uGust[i].z, 0.001);
-    float w = 1.0 - smoothstep(radius * 0.25, radius, d);
+    float w = 1.0 - smoothstep(radius * 0.15, radius, d);
     gust += use * w * uGust[i].w;
   }
-  col *= 1.0 - clamp(gust, 0.0, 1.0) * 0.38;
-  col = mix(col, vec3(0.05, 0.16, 0.2), clamp(gust, 0.0, 1.0) * 0.25);
-  float foam = smoothstep(0.07, 0.16, vHeight);
-  col = mix(col, vec3(0.86, 0.95, 0.96), foam * 0.55);
+  gust = clamp(gust, 0.0, 1.0);
+  float gustRip = sin(dot(vWorld.xz, wdir) * 4.5 - uTime * 7.0) * sin(dot(vWorld.xz, wperp) * 3.4 + uTime * 5.0);
+  n.xz += wdir * gustRip * gust * 0.28;
+  n = normalize(n);
+
+  vec3 viewDir = normalize(cameraPosition - vWorld);
+  float ndotv = max(dot(n, viewDir), 0.0);
+  float fres = 0.02 + 0.98 * pow(1.0 - ndotv, 5.0);
+
+  vec3 R = reflect(-viewDir, n);
+  float skyH = clamp(R.y * 1.25 + 0.05, 0.0, 1.0);
+  vec3 zenith = vec3(0.12, 0.31, 0.62);
+  vec3 sky = mix(uHorizon, zenith, pow(skyH, 0.6));
+  float sunDot = max(dot(R, uSun), 0.0);
+  sky += vec3(1.0, 0.78, 0.55) * pow(sunDot, 6.0) * 0.28;
+  sky += vec3(1.0, 0.97, 0.92) * pow(sunDot, 280.0);
+  sky = mix(sky, uDeep * 0.65, smoothstep(0.04, -0.2, R.y));
+  if (uEnvMix > 0.001) {
+    sky = mix(sky, textureCube(uEnv, R).rgb, uEnvMix);
+  }
+
+  float hMix = clamp(vHeight * 2.4 + 0.35, 0.0, 1.0);
+  vec3 water = mix(uDeep, uShallow, hMix);
+  float upwell = pow(max(dot(normalize(n + uSun), viewDir), 0.0), 2.2);
+  water += uScatter * upwell * (1.0 - fres) * (0.35 + hMix * 0.8);
+
+  vec3 col = mix(water, sky, fres);
+
+  vec3 H = normalize(uSun + viewDir);
+  float ndh = max(dot(n, H), 0.0);
+  float spec = pow(ndh, 80.0);
+  float glint = pow(ndh, 320.0);
+  float spark = 0.55 + 0.45 * pow(max(sin(dot(vWorld.xz, wdir) * 9.0 + uTime * 3.5), 0.0), 6.0);
+  col += vec3(1.0, 0.97, 0.9) * (spec * 0.45 + glint * 1.7) * spark;
+
+  float crest = smoothstep(0.16, 0.48, vFoam) * uFoamScale;
+  vec2 rel = vWorld.xz - uBoat;
+  float c = cos(uHeading);
+  float s = sin(uHeading);
+  float fwd = rel.x * c + rel.y * s;
+  float side = -rel.x * s + rel.y * c;
+  float spd = clamp(uSpeed / 3.2, 0.0, 1.0);
+  float bowBand = smoothstep(0.85, 1.45, fwd) * (1.0 - smoothstep(1.7, 2.45, fwd));
+  float bow = bowBand * (1.0 - smoothstep(0.12, 0.62, abs(side)));
+  float along = smoothstep(-1.7, 0.2, fwd) * (1.0 - smoothstep(0.45, 1.45, fwd));
+  float shoulder = along * smoothstep(0.12, 0.38, abs(side)) * (1.0 - smoothstep(0.42, 0.95, abs(side)));
+  float hullFoam = (bow * 1.2 + shoulder * 0.75) * spd;
+
+  float wakeFoam = 0.0;
+  for (int i = 0; i < 8; i++) {
+    float use = float(i < uWakeN);
+    vec2 p = uWake[i].xy;
+    float age = uWake[i].z;
+    float rad = uWake[i].w;
+    float d = distance(vWorld.xz, p);
+    float band = 1.0 - smoothstep(rad * 0.15, rad, d);
+    wakeFoam += use * band * (1.0 - clamp(age, 0.0, 1.0));
+  }
+  wakeFoam *= smoothstep(0.4, 1.4, uSpeed);
+
+  float foam = clamp(crest + hullFoam + wakeFoam * 0.95, 0.0, 1.0);
+  float grain = 0.72 + 0.28 * hash(floor(vWorld.xz * 2.5 + uTime * 0.4));
+  vec3 foamCol = vec3(0.82, 0.9, 0.91) * grain;
+  col = mix(col, foamCol, foam * 0.88);
+
+  col *= mix(1.0, 0.62, gust);
+  col = mix(col, vec3(0.03, 0.1, 0.14), gust * 0.22);
+
   gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+  #include <fog_fragment>
 }
 `;
+
+interface WakeSample {
+  x: number;
+  z: number;
+  age: number;
+}
 
 export class Ocean {
   readonly mesh: Mesh;
   private material: ShaderMaterial;
   private geometry: PlaneGeometry;
-  segments: number;
+  private segments: number;
+  private waves: GerstnerWave[] = [];
+  private wake: WakeSample[] = [];
+  private amp = 1;
 
-  constructor(quality: 'performance' | 'quality') {
-    this.segments = quality === 'quality' ? 160 : 96;
-    this.geometry = new PlaneGeometry(420, 420, this.segments, this.segments);
-    this.geometry.rotateX(-Math.PI / 2);
-    const waveA = WAVES.map((w) => new Vector4(w.dirX, w.dirZ, w.amplitude, w.wavelength));
-    const waveB = WAVES.map((w) => new Vector4(w.steepness, w.speed, w.phase, 0));
+  constructor(quality: 'low' | 'high', env: CubeTexture) {
+    this.segments = quality === 'high' ? 160 : 72;
+    this.geometry = this.makeGeometry(this.segments);
+    const physA = WAVES.map((w) => new Vector4(w.dirX, w.dirZ, w.amplitude, w.wavelength));
+    const physB = WAVES.map((w) => new Vector4(w.steepness, w.speed, w.phase, 0));
     this.material = new ShaderMaterial({
       vertexShader: VERT,
-      fragmentShader: FRAG,
+      fragmentShader: quality === 'high' ? FRAG : FRAG_LOW,
       uniforms: {
         uTime: { value: 0 },
-        uWaves: { value: quality === 'quality' ? 4 : 3 },
-        uWaveA: { value: waveA },
-        uWaveB: { value: waveB },
-        uDeep: { value: new Color('#083246') },
-        uShallow: { value: new Color('#1f8f92') },
-        uHorizon: { value: new Color('#b7d5d4') },
-        uSun: { value: new Vector3(0.35, 0.82, 0.28).normalize() },
+        uCount: { value: waveCountFor(quality) },
+        uA: { value: Array.from({ length: 8 }, () => new Vector4()) },
+        uB: { value: Array.from({ length: 8 }, () => new Vector4()) },
+        uPhys: { value: 4 },
+        uPhysA: { value: physA },
+        uPhysB: { value: physB },
+        uDeep: { value: new Color('#062433') },
+        uShallow: { value: new Color('#1c8f86') },
+        uScatter: { value: new Color('#3ecfb4') },
+        uHorizon: { value: new Color('#b9cddd') },
+        uSun: { value: new Vector3(0.45, 0.55, 0.15).normalize() },
+        uWind: { value: new Vector2(1, 0) },
+        uBoat: { value: new Vector2() },
+        uHeading: { value: 0 },
+        uSpeed: { value: 0 },
+        uWakeN: { value: 0 },
+        uWake: { value: Array.from({ length: 8 }, () => new Vector4()) },
         uGusts: { value: 0 },
         uGust: { value: Array.from({ length: 6 }, () => new Vector4()) },
+        uFoamScale: { value: quality === 'high' ? 1 : 0.85 },
+        uEnv: { value: env },
+        uEnvMix: { value: quality === 'high' ? 0.55 : 0 },
+        fogColor: { value: new Color('#c5d4e1') },
+        fogDensity: { value: 0.011 },
+        fogNear: { value: 1 },
+        fogFar: { value: 400 },
       },
       side: DoubleSide,
+      fog: true,
     });
     this.mesh = new Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = false;
+    this.mesh.receiveShadow = false;
+    this.syncWaves(Math.PI / 2, 5.66);
   }
 
-  setQuality(quality: 'performance' | 'quality'): void {
-    const segments = quality === 'quality' ? 160 : 96;
+  setQuality(quality: 'low' | 'high'): void {
+    const segments = quality === 'high' ? 160 : 72;
     if (segments !== this.segments) {
       this.segments = segments;
       this.geometry.dispose();
-      this.geometry = new PlaneGeometry(420, 420, segments, segments);
-      this.geometry.rotateX(-Math.PI / 2);
+      this.geometry = this.makeGeometry(segments);
       this.mesh.geometry = this.geometry;
     }
-    this.material.uniforms.uWaves.value = quality === 'quality' ? 4 : 3;
+    this.material.fragmentShader = quality === 'high' ? FRAG : FRAG_LOW;
+    this.material.needsUpdate = true;
+    this.material.uniforms.uCount.value = waveCountFor(quality);
+    this.material.uniforms.uFoamScale.value = quality === 'high' ? 1 : 0.85;
+    this.material.uniforms.uEnvMix.value = quality === 'high' ? 0.55 : 0;
+    this.mesh.receiveShadow = false;
+    this.syncWaves(this.windFrom, this.windSpeed);
   }
 
-  update(time: number, boatX: number, boatZ: number, gusts: Gust[]): void {
-    const cell = 420 / this.segments;
+  private windFrom = Math.PI / 2;
+  private windSpeed = 5.66;
+
+  /** Visual swell height at world xz, matching the vertex displacement's vertical part. */
+  heightAt(x: number, z: number, time: number): number {
+    return gerstnerAt(x, z, time, this.waves).height;
+  }
+
+  slopeAt(x: number, z: number, time: number): { slopeX: number; slopeZ: number } {
+    const s = gerstnerAt(x, z, time, this.waves);
+    return { slopeX: s.slopeX, slopeZ: s.slopeZ };
+  }
+
+  setSun(dir: Vector3, horizon: Color): void {
+    (this.material.uniforms.uSun.value as Vector3).copy(dir).normalize();
+    (this.material.uniforms.uHorizon.value as Color).copy(horizon);
+  }
+
+  update(
+    time: number,
+    boatX: number,
+    boatZ: number,
+    heading: number,
+    speed: number,
+    windFrom: number,
+    windSpeed: number,
+    gusts: Gust[],
+    dt: number,
+    moving: boolean,
+  ): void {
+    const cell = 300 / this.segments;
     this.mesh.position.x = Math.round(boatX / cell) * cell;
     this.mesh.position.z = Math.round(boatZ / cell) * cell;
     this.material.uniforms.uTime.value = time;
-    const packed = this.material.uniforms.uGust.value as Vector4[];
+    this.windFrom = windFrom;
+    this.windSpeed = windSpeed;
+    const target = Math.max(0.5, Math.min(1.65, windSpeed / 5.66));
+    this.amp += (target - this.amp) * (1 - Math.exp(-dt * 0.35));
+    this.syncWaves(windFrom, 5.66 * this.amp);
+
+    const wind = this.material.uniforms.uWind.value as Vector2;
+    wind.set(-Math.cos(windFrom), -Math.sin(windFrom));
+    (this.material.uniforms.uBoat.value as Vector2).set(boatX, boatZ);
+    this.material.uniforms.uHeading.value = heading;
+    this.material.uniforms.uSpeed.value = speed;
+
+    if (moving && speed > 0.45) {
+      for (const p of this.wake) p.age += dt;
+      this.wake = this.wake.filter((p) => p.age < 6.5);
+      const sx = boatX - Math.cos(heading) * 1.7;
+      const sz = boatZ - Math.sin(heading) * 1.7;
+      const last = this.wake[this.wake.length - 1];
+      if (!last || Math.hypot(sx - last.x, sz - last.z) > 0.85) {
+        this.wake.push({ x: sx, z: sz, age: 0 });
+        if (this.wake.length > 24) this.wake.shift();
+      }
+    }
+    const packed = this.material.uniforms.uWake.value as Vector4[];
+    const samples = this.wake.slice(-8);
+    this.material.uniforms.uWakeN.value = samples.length;
+    for (let i = 0; i < samples.length; i++) {
+      const p = samples[i];
+      const widen = 0.45 + p.age * 0.42 + speed * 0.08;
+      packed[i].set(p.x, p.z, p.age / 6.5, widen);
+    }
+
+    const gustPacked = this.material.uniforms.uGust.value as Vector4[];
     const n = Math.min(6, gusts.length);
     this.material.uniforms.uGusts.value = n;
     for (let i = 0; i < n; i++) {
-      packed[i].set(gusts[i].x, gusts[i].y, gusts[i].r, gusts[i].amp);
+      gustPacked[i].set(gusts[i].x, gusts[i].y, gusts[i].r, gusts[i].amp);
     }
+  }
+
+  private syncWaves(windFrom: number, windSpeed: number): void {
+    const count = this.material.uniforms.uCount.value as number;
+    this.waves = buildGerstner(windFrom, windSpeed, count);
+    const a = this.material.uniforms.uA.value as Vector4[];
+    const b = this.material.uniforms.uB.value as Vector4[];
+    for (let i = 0; i < this.waves.length; i++) {
+      const w = this.waves[i];
+      a[i].set(w.dirX, w.dirZ, w.amplitude, w.wavelength);
+      b[i].set(w.steepness, w.omega, w.phase, 0);
+    }
+  }
+
+  private makeGeometry(segments: number): PlaneGeometry {
+    const geo = new PlaneGeometry(300, 300, segments, segments);
+    geo.rotateX(-Math.PI / 2);
+    return geo;
   }
 
   dispose(): void {
