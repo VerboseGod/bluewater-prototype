@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chaseAim } from '../src/render/chase';
 import { MAST_X, sailPoint } from '../src/render/sail-mesh';
-import { hintOpacity } from '../src/hud';
+import { hintOpacity, stripOpacity } from '../src/hud';
 import { windwardSign } from '../src/sim/sim';
 
 describe('chase framing', () => {
@@ -52,6 +52,15 @@ describe('coaching prompt', () => {
     expect(hintOpacity(5000, false, 'Trim in')).toBe(0);
     expect(hintOpacity(100, true, '')).toBe(0);
     const mid = hintOpacity(4300, false, 'Trim in');
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+  });
+
+  it('lets the phase banner fade after about four seconds', () => {
+    expect(stripOpacity(0, 'Sea breeze, west · berth')).toBe(1);
+    expect(stripOpacity(3900, 'Sea breeze, west · berth')).toBe(1);
+    expect(stripOpacity(5000, 'Sea breeze, west · berth')).toBe(0);
+    const mid = stripOpacity(4400, 'Sea breeze, west · berth');
     expect(mid).toBeGreaterThan(0);
     expect(mid).toBeLessThan(1);
   });

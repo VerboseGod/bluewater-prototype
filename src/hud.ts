@@ -10,6 +10,8 @@ import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type T
 const HINT_HOLD = 3600;
 const HINT_FADE = 1100;
 const HINT_URGENT_HOLD = 5200;
+const STRIP_HOLD = 4000;
+const STRIP_FADE = 800;
 
 /** 1 while the prompt is up, then a fade, then 0. Empty text stays hidden. */
 export function hintOpacity(ageMs: number, urgent: boolean, text: string): number {
@@ -18,6 +20,14 @@ export function hintOpacity(ageMs: number, urgent: boolean, text: string): numbe
   if (ageMs <= hold) return 1;
   if (ageMs >= hold + HINT_FADE) return 0;
   return 1 - (ageMs - hold) / HINT_FADE;
+}
+
+/** The phase banner stays up for about four seconds, then fades. */
+export function stripOpacity(ageMs: number, text: string): number {
+  if (!text) return 0;
+  if (ageMs <= STRIP_HOLD) return 1;
+  if (ageMs >= STRIP_HOLD + STRIP_FADE) return 0;
+  return 1 - (ageMs - STRIP_HOLD) / STRIP_FADE;
 }
 
 export class Hud {
@@ -46,6 +56,8 @@ export class Hud {
   private stats: HTMLElement;
   private legend: HTMLElement;
   private strip: HTMLElement;
+  private stripText = '';
+  private stripAt = 0;
   private title: HTMLElement;
   private scenarioBtn: HTMLButtonElement;
   private scenarioMenu: HTMLButtonElement;
@@ -222,6 +234,7 @@ export class Hud {
     this.scenarioBtn.textContent = leave;
     this.scenarioMenu.textContent = leave;
     this.placesBtn.textContent = mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
+    if (mode !== 'open') this.link.textContent = 'Keyboard';
     this.legend.textContent =
       mode === 'dock'
         ? 'A out · B in · Y assisted · F anchor · M line · Z wind · View reset · Menu debrief · X graphics'
@@ -229,17 +242,22 @@ export class Hud {
           ? 'Steer · sheet · Q paddle · Z wind · M line · Places for light · Menu chart · X graphics'
           : 'Stick steers · triggers sheet · A out · B in · Y assisted · Places · V cinematic · Menu debrief · X graphics';
     if (mode === 'open') this.strip.classList.add('hidden');
-    this.link.textContent = mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Dock' : 'Steady';
   }
 
   setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info'): void {
     if ((this.scenario !== 'dock' && this.scenario !== 'harbour') || !text) {
       this.strip.classList.add('hidden');
+      this.stripText = '';
       return;
+    }
+    if (text !== this.stripText) {
+      this.stripText = text;
+      this.stripAt = performance.now();
     }
     this.strip.classList.remove('hidden', 'good', 'bad');
     if (kind !== 'info') this.strip.classList.add(kind);
     this.strip.textContent = text;
+    this.fadeStrip();
   }
 
   setFps(fps: number): void {
@@ -293,6 +311,14 @@ export class Hud {
     this.hint.classList.toggle('urgent', urgent);
     this.hint.style.opacity = opacity.toFixed(3);
     this.hint.style.visibility = opacity > 0.02 ? 'visible' : 'hidden';
+    this.fadeStrip();
+  }
+
+  private fadeStrip(): void {
+    if (this.strip.classList.contains('hidden')) return;
+    const opacity = stripOpacity(performance.now() - this.stripAt, this.stripText);
+    this.strip.style.opacity = opacity.toFixed(3);
+    this.strip.style.visibility = opacity > 0.02 ? 'visible' : 'hidden';
   }
 
   drawDebrief(sim: Simulation): void {
