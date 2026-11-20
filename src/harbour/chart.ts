@@ -1,5 +1,5 @@
-import type { HarbourReport } from './session';
-import type { HarbourWorld } from './world';
+import type { HarbourReport } from '../../core/harbour/session';
+import type { HarbourWorld } from '../../core/harbour/world';
 
 /** Debrief chart: coastline, depth, marks, and the track. North is up. */
 export function drawHarbourChart(

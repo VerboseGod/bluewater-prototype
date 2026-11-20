@@ -1,4 +1,4 @@
-import { windwardSign } from '../sim/sim';
+import { windwardSign } from '../../core/sim/sim';
 
 /** Where the default chase camera sits, and the point it looks at. */
 export interface ChaseAim {

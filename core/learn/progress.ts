@@ -16,17 +16,8 @@ export function emptyProgress(): Progress {
   return { stars: {}, done: [] };
 }
 
-function browserStore(): Kv | null {
-  try {
-    if (typeof localStorage === 'undefined') return null;
-    return localStorage;
-  } catch {
-    return null;
-  }
-}
-
 export function loadProgress(store?: Kv | null): Progress {
-  const kv = store === undefined ? browserStore() : store;
+  const kv = store ?? null;
   if (!kv) return emptyProgress();
   try {
     const raw = kv.getItem(PROGRESS_KEY);
@@ -48,7 +39,7 @@ export function loadProgress(store?: Kv | null): Progress {
 }
 
 export function saveProgress(progress: Progress, store?: Kv | null): void {
-  const kv = store === undefined ? browserStore() : store;
+  const kv = store ?? null;
   if (!kv) return;
   kv.setItem(PROGRESS_KEY, JSON.stringify(progress));
 }

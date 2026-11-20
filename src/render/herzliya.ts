@@ -15,8 +15,8 @@ import {
   Vector2,
   ShapeUtils,
 } from 'three';
-import type { Ring } from '../harbour/geo';
-import { herzliya, type HarbourWorld } from '../harbour/world';
+import type { Ring } from '../../core/harbour/geo';
+import { herzliya, type HarbourWorld } from '../../core/harbour/world';
 
 const SAND = new MeshStandardMaterial({ color: '#e4c98a', roughness: 1 });
 const DECK = new MeshStandardMaterial({ color: '#3f3b36', roughness: 1, metalness: 0 });

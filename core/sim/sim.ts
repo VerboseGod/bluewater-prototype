@@ -133,6 +133,67 @@ export interface SimSnapshot {
   shake: number;
 }
 
+/** Plain wind field. `modify` is a scenario hook and is not stored. */
+export interface WindState {
+  baseSpeed: number;
+  baseFrom: number;
+  steady: boolean;
+  gustFactor: number;
+  gusts: Gust[];
+  nextSpawn: number;
+  rngState: number;
+}
+
+/**
+ * Plain boat. A port keeps this struct and passes it to `step`.
+ * `waveScale` is a scenario hook (1 in open water) and is not stored.
+ */
+export interface BoatState {
+  x: number;
+  y: number;
+  heading: number;
+  vx: number;
+  vy: number;
+  currentX: number;
+  currentY: number;
+  yawRate: number;
+  heel: number;
+  heelRate: number;
+  sheet: number;
+  boom: number;
+  boomRate: number;
+  planing: boolean;
+  capsized: boolean;
+  capsizeTimer: number;
+  capsizeCount: number;
+  capsizeSide: number;
+  time: number;
+  timeLuffing: number;
+  timeStalled: number;
+  bestVmgUp: number;
+  bestVmgDown: number;
+  maxSpeed: number;
+  track: TrackPoint[];
+  marks: ManeuverMark[];
+  trackAccum: number;
+  prevHeading: number;
+  armedTack: boolean;
+  armedGybe: boolean;
+  prevBoomSign: number;
+  crossedBoomAt: number;
+  rumble: { strong: number; weak: number; ms: number } | null;
+  lastTackQuality: number;
+  prevGust: number;
+  hikeCmd: number;
+  crew: number;
+  crewManual: boolean;
+  shake: number;
+  assisted: boolean;
+  waves: boolean;
+  wind: WindState;
+  view: SimSnapshot;
+}
+
 export type SailorStation = 'hiked' | 'rail' | 'in' | 'leeward';
 
 /** Which way is windward, in starboard-positive boat axes. */
@@ -806,6 +867,132 @@ export class Simulation {
 
   private requestRumble(strong: number, weak: number, ms: number): void {
     this.rumble = { strong, weak, ms };
+  }
+
+  /** Copy every field the next tick reads. Hooks (`waveScale`, `wind.modify`) stay on the instance. */
+  toState(): BoatState {
+    return {
+      x: this.x,
+      y: this.y,
+      heading: this.heading,
+      vx: this.vx,
+      vy: this.vy,
+      currentX: this.currentX,
+      currentY: this.currentY,
+      yawRate: this.yawRate,
+      heel: this.heel,
+      heelRate: this.heelRate,
+      sheet: this.sheet,
+      boom: this.boom,
+      boomRate: this.boomRate,
+      planing: this.planing,
+      capsized: this.capsized,
+      capsizeTimer: this.capsizeTimer,
+      capsizeCount: this.capsizeCount,
+      capsizeSide: this.capsizeSide,
+      time: this.time,
+      timeLuffing: this.timeLuffing,
+      timeStalled: this.timeStalled,
+      bestVmgUp: this.bestVmgUp,
+      bestVmgDown: this.bestVmgDown,
+      maxSpeed: this.maxSpeed,
+      track: this.track.map((p) => ({ ...p })),
+      marks: this.marks.map((m) => ({ ...m })),
+      trackAccum: this.trackAccum,
+      prevHeading: this.prevHeading,
+      armedTack: this.armedTack,
+      armedGybe: this.armedGybe,
+      prevBoomSign: this.prevBoomSign,
+      crossedBoomAt: this.crossedBoomAt,
+      rumble: this.rumble ? { ...this.rumble } : null,
+      lastTackQuality: this.lastTackQuality,
+      prevGust: this.prevGust,
+      hikeCmd: this.hikeCmd,
+      crew: this.crew,
+      crewManual: this.crewManual,
+      shake: this.shake,
+      assisted: this.assisted,
+      waves: this.waves,
+      wind: {
+        baseSpeed: this.wind.baseSpeed,
+        baseFrom: this.wind.baseFrom,
+        steady: this.wind.steady,
+        gustFactor: this.wind.gustFactor,
+        gusts: this.wind.gusts.map((g) => ({ ...g })),
+        nextSpawn: this.wind.nextSpawn,
+        rngState: this.wind.rngState,
+      },
+      view: { ...this.snapshot },
+    };
+  }
+
+  applyState(state: BoatState): void {
+    this.x = state.x;
+    this.y = state.y;
+    this.heading = state.heading;
+    this.vx = state.vx;
+    this.vy = state.vy;
+    this.currentX = state.currentX;
+    this.currentY = state.currentY;
+    this.yawRate = state.yawRate;
+    this.heel = state.heel;
+    this.heelRate = state.heelRate;
+    this.sheet = state.sheet;
+    this.boom = state.boom;
+    this.boomRate = state.boomRate;
+    this.planing = state.planing;
+    this.capsized = state.capsized;
+    this.capsizeTimer = state.capsizeTimer;
+    this.capsizeCount = state.capsizeCount;
+    this.capsizeSide = state.capsizeSide;
+    this.time = state.time;
+    this.timeLuffing = state.timeLuffing;
+    this.timeStalled = state.timeStalled;
+    this.bestVmgUp = state.bestVmgUp;
+    this.bestVmgDown = state.bestVmgDown;
+    this.maxSpeed = state.maxSpeed;
+    this.track = state.track.map((p) => ({ ...p }));
+    this.marks = state.marks.map((m) => ({ ...m }));
+    this.trackAccum = state.trackAccum;
+    this.prevHeading = state.prevHeading;
+    this.armedTack = state.armedTack;
+    this.armedGybe = state.armedGybe;
+    this.prevBoomSign = state.prevBoomSign;
+    this.crossedBoomAt = state.crossedBoomAt;
+    this.rumble = state.rumble ? { ...state.rumble } : null;
+    this.lastTackQuality = state.lastTackQuality;
+    this.prevGust = state.prevGust;
+    this.hikeCmd = state.hikeCmd;
+    this.crew = state.crew;
+    this.crewManual = state.crewManual;
+    this.shake = state.shake;
+    this.assisted = state.assisted;
+    this.wind.baseSpeed = state.wind.baseSpeed;
+    this.wind.baseFrom = state.wind.baseFrom;
+    this.wind.steady = state.wind.steady;
+    this.wind.gustFactor = state.wind.gustFactor;
+    this.wind.gusts = state.wind.gusts.map((g) => ({ ...g }));
+    this.wind.nextSpawn = state.wind.nextSpawn;
+    this.wind.rngState = state.wind.rngState;
+    this.snapshot = { ...state.view };
+  }
+
+  static fromState(state: BoatState): Simulation {
+    const sim = new Simulation({
+      windSpeed: state.wind.baseSpeed,
+      windFrom: state.wind.baseFrom,
+      steady: state.wind.steady,
+      waves: state.waves,
+      assisted: state.assisted,
+      heading: state.heading,
+      x: state.x,
+      y: state.y,
+      vx: state.vx,
+      vy: state.vy,
+      sheet: state.sheet,
+    });
+    sim.applyState(state);
+    return sim;
   }
 }
 

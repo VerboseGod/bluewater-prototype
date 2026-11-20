@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bluewater.local/schemas/scenarios.schema.json",
+  "title": "Scenario setups",
+  "description": "Open water, practice dock, learn launches, co-op beat, and harbour wind presets. Positions are metres. x is east, y is north. Headings and wind-from angles are radians, 0 from the east, increasing counter-clockwise. Speeds are m/s unless the name says Kn.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["openWater", "dock", "learn", "coop", "harbour"],
+  "properties": {
+    "openWater": { "type": "object" },
+    "dock": {
+      "type": "object",
+      "required": ["pontoon", "finger", "breakwaterN", "breakwaterE", "start", "winds", "depth", "windSpeed"],
+      "properties": {
+        "pontoon": { "$ref": "#/$defs/aabb" },
+        "finger": { "$ref": "#/$defs/aabb" },
+        "breakwaterN": { "$ref": "#/$defs/aabb" },
+        "breakwaterE": { "$ref": "#/$defs/aabb" },
+        "depth": { "type": "number", "description": "Basin depth, m" },
+        "windSpeed": { "type": "number", "description": "True wind, m/s" },
+        "winds": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "label", "from"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "from": { "type": "number", "description": "Direction the wind comes from, radians" }
+            }
+          }
+        }
+      }
+    },
+    "learn": { "type": "object" },
+    "coop": { "type": "object" },
+    "harbour": {
+      "type": "object",
+      "required": ["windSpeed", "winds"],
+      "properties": {
+        "windSpeed": { "type": "number" },
+        "winds": { "type": "array" }
+      }
+    }
+  },
+  "$defs": {
+    "aabb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minX", "maxX", "minY", "maxY"],
+      "properties": {
+        "minX": { "type": "number" },
+        "maxX": { "type": "number" },
+        "minY": { "type": "number" },
+        "maxY": { "type": "number" }
+      }
+    }
+  }
+}

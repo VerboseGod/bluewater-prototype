@@ -2,7 +2,8 @@ import { AnchorRig } from '../dock/anchor';
 import { classifyImpact, type ImpactClass } from '../dock/contact';
 import { holdMooring, mooringReadiness } from '../dock/mooring';
 import { Scoreboard, type DockReport } from '../dock/score';
-import type { InputState } from '../input';
+import type { ScenarioInput as InputState } from '../input';
+import scenarios from '../data/scenarios.json';
 import { headingFwd, KT, wrapPi } from '../sim/math';
 import { boomForSheet } from '../sim/sail';
 import { Simulation } from '../sim/sim';
@@ -22,14 +23,9 @@ export interface HarbourWind {
 }
 
 /** Afternoon sea breeze, plus a south-westerly. Speed stays 11 kn, the open-water breeze. */
-export const HARBOUR_WINDS: readonly HarbourWind[] = [
-  { id: 'west', label: 'Sea breeze, west', from: Math.PI },
-  { id: 'wnw', label: 'Sea breeze, WNW', from: (157.5 * Math.PI) / 180 },
-  { id: 'nw', label: 'Sea breeze, NW', from: (135 * Math.PI) / 180 },
-  { id: 'sw', label: 'South-west', from: (-135 * Math.PI) / 180 },
-];
+export const HARBOUR_WINDS: readonly HarbourWind[] = scenarios.harbour.winds;
 
-export const HARBOUR_WIND_MS = 5.66;
+export const HARBOUR_WIND_MS = scenarios.harbour.windSpeed;
 
 export interface HarbourReport {
   phase: HarbourPhase;

@@ -13,31 +13,35 @@ import { BowSpray, Wake, WindCues } from './render/effects';
 import { Ocean } from './render/ocean';
 import { Marks, makeCoast } from './render/scenery';
 import { applySkyQuality, applyTimeOfDay, createSky, followBoat, setShadowStage, type SkyRig, type TimeOfDay } from './render/sky';
-import { wrapPi } from './sim/math';
-import { DockSession } from './dock/session';
-import type { DockReport } from './dock/score';
-import { HarbourSession, type HarbourReport } from './harbour/session';
+import { controlsFromBoat, scenarioFromBoat } from '../core/input';
+import { coopOptions, openWaterOptions } from '../core/step';
+import scenarios from '../core/data/scenarios.json';
+import { wrapPi } from '../core/sim/math';
+import { DockSession } from '../core/dock/session';
+import type { DockReport } from '../core/dock/score';
+import { HarbourSession, type HarbourReport } from '../core/harbour/session';
 import { HerzliyaView } from './render/herzliya';
 import { Hud } from './hud';
-import { LearnDirector } from './learn/director';
-import { LESSONS, launchFor, sampleOf, type DockView, type LessonLaunch } from './learn/model';
+import { LearnDirector } from '../core/learn/director';
+import { LESSONS, launchFor, sampleOf, type DockView, type LessonLaunch } from '../core/learn/model';
 import { LearnOverlay } from './learn/overlay';
-import { pilotStick } from './learn/pilot';
-import { attachKeyboard, readCoopKeys, readInput, readPads, rumble, setInputOptions, setPadLayout, type InputState } from './input';
+import { pilotStick } from '../core/learn/pilot';
+import { attachKeyboard, readCoopKeys, readInput, readPads, rumble, setInputOptions, setPadLayout, toBoatInput, type InputState } from './input';
 import { Shell } from './ui/shell';
 import { loadSettings, saveSettings, type Settings } from './ui/settings';
 import { promptsFor } from './ui/prompts';
 import { boatReadout } from './ui/status';
 import { freshWatch, watchGamepad, type WatchState } from './ui/watch';
+import { browserStore } from './persistence';
 import { CoopOverlay } from './coop/overlay';
-import { LEFT_MARK, RIGHT_MARK } from './coop/drill';
-import { CoopSession } from './coop/session';
+import { LEFT_MARK, RIGHT_MARK } from '../core/coop/drill';
+import { CoopSession } from '../core/coop/session';
 import { HarbourView } from './render/harbour';
 import { chaseAim } from './render/chase';
 import { TrackRibbon } from './render/ribbon';
 import { hullFloat } from './render/float';
-import { KT } from './sim/math';
-import { Simulation, windwardSign, type Controls, type SimSnapshot } from './sim/sim';
+import { KT } from '../core/sim/math';
+import { Simulation, windwardSign, type Controls, type SimSnapshot } from '../core/sim/sim';
 
 type CamMode = 'chase' | 'cockpit' | 'top' | 'cinema';
 type Quality = 'low' | 'high';
@@ -47,17 +51,7 @@ const MODES: CamMode[] = ['chase', 'cockpit', 'top', 'cinema'];
 const params = new URLSearchParams(location.search);
 
 function openWater(): Simulation {
-  return new Simulation({
-    windSpeed: 5.66,
-    windFrom: Math.PI / 2,
-    steady: false,
-    waves: true,
-    assisted: true,
-    heading: 0,
-    sheet: params.has('demo') ? 0.48 : 0.06,
-    vx: params.has('demo') ? 2.6 : 0,
-    vy: 0,
-  });
+  return new Simulation(openWaterOptions(params.has('demo')));
 }
 
 export class Game {
@@ -449,8 +443,8 @@ export class Game {
       while (this.acc >= this.step && guard < guardMax) {
         let frameInput = this.stick ? { ...input, ...this.stick } : input;
         if (this.reel && this.marina && !this.stick) frameInput = reelStick(frameInput, this.sim.heading, this.reelHeading, this.reelT, this.sim.snapshot.speed);
-        if (this.marina) this.marina.step(this.step, frameInput);
-        else if (this.dock) this.dock.step(this.step, frameInput);
+        if (this.marina) this.marina.step(this.step, scenarioFromBoat(toBoatInput(frameInput)));
+        else if (this.dock) this.dock.step(this.step, scenarioFromBoat(toBoatInput(frameInput)));
         else if (this.coop) {
           this.coop.noteTime(this.sim.time);
           const controls = this.coop.tick(this.step, readPads()[0], readPads()[1], readCoopKeys(), {
@@ -470,13 +464,15 @@ export class Game {
           });
           this.sim.step(this.step, controls);
         } else {
-          this.sim.step(this.step, this.stick ?? {
+          const sailed = {
+            ...input,
             rudder: driven.rudder,
             sheetIn: driven.sheetIn,
             sheetOut: driven.sheetOut,
             hike: driven.hike,
             moveIn: driven.moveIn,
-          });
+          };
+          this.sim.step(this.step, this.stick ?? controlsFromBoat(toBoatInput(sailed)));
         }
         const buzz = this.sim.consumeRumble();
         if (buzz) this.feel(buzz.strong, buzz.weak, buzz.ms);
@@ -713,14 +709,9 @@ export class Game {
     this.setTime('day');
     setShadowStage(this.sky, 'boat', this.quality === 'high');
     setPadLayout('coop');
-    this.sim = new Simulation({
-      windSpeed: 5.66,
-      windFrom: Math.PI / 2,
-      steady: true,
-      waves: false,
-      assisted: true,
-    });
-    this.sim.placeCourse(46, 4.6, 1);
+    this.sim = new Simulation(coopOptions());
+    const coop = scenarios.coop;
+    this.sim.placeCourse(coop.placeTwaDeg, coop.placeSpeedKn, coop.placeSign);
     this.sim.step(1 / 60, { rudder: 0, sheetIn: 0, sheetOut: 0, hike: 0, moveIn: 0 });
     this.coop = new CoopSession();
     this.coop.helmStbd = this.sim.crew;
@@ -854,16 +845,8 @@ export class Game {
           : null;
       const stick = this.stick ?? pilot;
       const frameInput = stick ? { ...input, ...stick } : input;
-      if (this.dock) this.dock.step(this.step, frameInput);
-      else {
-        this.sim.step(this.step, {
-          rudder: frameInput.rudder,
-          sheetIn: frameInput.sheetIn,
-          sheetOut: frameInput.sheetOut,
-          hike: frameInput.hike,
-          moveIn: frameInput.moveIn,
-        });
-      }
+      if (this.dock) this.dock.step(this.step, scenarioFromBoat(toBoatInput(frameInput)));
+      else this.sim.step(this.step, controlsFromBoat(toBoatInput(frameInput)));
       const buzz = this.sim.consumeRumble();
       if (buzz) this.feel(buzz.strong, buzz.weak, buzz.ms);
       this.acc -= this.step;
@@ -941,7 +924,7 @@ export class Game {
     const pilot = fromQuery ? this.pilotMode : 'off';
     const lessonN = fromQuery ? this.lessonQuery : 0;
     this.enterOpen();
-    this.learn = new LearnDirector();
+    this.learn = new LearnDirector(browserStore());
     this.pilotMode = pilot;
     this.hud.setScenario('learn');
     this.cues.setTeaching(true);

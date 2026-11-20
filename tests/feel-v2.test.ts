@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DEG, KT, wrapPi } from '../src/sim/math';
-import { suggestedSheet } from '../src/sim/sail';
-import { windwardSign, type Controls } from '../src/sim/sim';
+import { DEG, KT, wrapPi } from '../core/sim/math';
+import { suggestedSheet } from '../core/sim/sail';
+import { windwardSign, type Controls } from '../core/sim/sim';
 import { DT, courseHeading, makeSim, settle } from './support';
 
 function hold(sim: ReturnType<typeof makeSim>, heading: number, crew: number | null, controls: Controls): void {

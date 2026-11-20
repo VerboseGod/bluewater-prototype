@@ -16,7 +16,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three';
-import type { Gust } from '../sim/wind';
+import type { Gust } from '../../core/sim/wind';
 
 const dummy = new Object3D();
 

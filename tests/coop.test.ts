@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { autoCrew } from '../src/coop/autocrew';
-import { CallMachine, syncScore, type SyncParts } from '../src/coop/call';
-import { LEFT_MARK, RIGHT_MARK } from '../src/coop/drill';
-import { EMPTY_KEYS, emptyPad, routeRoles, type PadAxes } from '../src/coop/route';
-import { freshMemory, scriptedPads, type ScriptView } from '../src/coop/script';
-import { CoopSession, type BoatSample } from '../src/coop/session';
-import { sheetWithVang, weightDrive } from '../src/coop/weight';
-import { wrapPi } from '../src/sim/math';
-import { Simulation } from '../src/sim/sim';
+import { autoCrew } from '../core/coop/autocrew';
+import { CallMachine, syncScore, type SyncParts } from '../core/coop/call';
+import { LEFT_MARK, RIGHT_MARK } from '../core/coop/drill';
+import { EMPTY_KEYS, emptyPad, routeRoles, type PadAxes } from '../core/coop/route';
+import { freshMemory, scriptedPads, type ScriptView } from '../core/coop/script';
+import { CoopSession, type BoatSample } from '../core/coop/session';
+import { sheetWithVang, weightDrive } from '../core/coop/weight';
+import { wrapPi } from '../core/sim/math';
+import { Simulation } from '../core/sim/sim';
 
 function pad(partial: Partial<PadAxes> & { buttons?: number[]; axes?: number[] }): PadAxes {
   const buttons = Array(16).fill(0);

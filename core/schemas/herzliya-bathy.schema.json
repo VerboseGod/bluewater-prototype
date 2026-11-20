@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bluewater.local/schemas/herzliya-bathy.schema.json",
+  "title": "Herzliya bathymetry grid",
+  "description": "EMODnet subset at data/herzliya/bathy.json. Elevation is metres, positive up. originLon/originLat are the south-west corner in degrees. Do not use for navigation.",
+  "type": "object",
+  "required": ["source", "licence", "width", "height", "originLon", "originLat", "lonStep", "latStep", "values"],
+  "properties": {
+    "source": { "type": "string" },
+    "coverageId": { "type": "string" },
+    "licence": { "type": "string" },
+    "licenceName": { "type": "string" },
+    "constraint": { "type": "string" },
+    "citation": { "type": "string" },
+    "retrieved": { "type": "string" },
+    "service": { "type": "string" },
+    "request": { "type": "string" },
+    "resolutionArcMin": { "type": "number" },
+    "resolutionNote": { "type": "string" },
+    "width": { "type": "integer", "minimum": 1 },
+    "height": { "type": "integer", "minimum": 1 },
+    "originLon": { "type": "number" },
+    "originLat": { "type": "number" },
+    "lonStep": { "type": "number" },
+    "latStep": { "type": "number" },
+    "values": {
+      "type": "array",
+      "items": { "type": "number" },
+      "description": "Row-major elevation, length width*height"
+    }
+  }
+}

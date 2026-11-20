@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { sailForces } from '../src/sim/sail';
-import { STALL_AOA } from '../src/sim/constants';
-import { DEG } from '../src/sim/math';
+import { sailForces } from '../core/sim/sail';
+import { STALL_AOA } from '../core/sim/constants';
+import { DEG } from '../core/sim/math';
 
 describe('sail force', () => {
   it('is near zero head to wind', () => {

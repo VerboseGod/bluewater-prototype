@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 8734 --strictPort",
-    "build": "tsc --noEmit && vite build && vite build --config vite.single.config.ts",
+    "build": "tsc --noEmit && tsc -p core/tsconfig.json && vite build && vite build --config vite.single.config.ts",
+    "check:core": "tsc -p core/tsconfig.json",
     "preview": "vite preview --host 127.0.0.1 --port 8735 --strictPort",
     "test": "vitest run",
     "test:e2e": "playwright test"
@@ -15,6 +16,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1",
+    "@types/node": "^22.20.5",
     "@types/three": "^0.187.0",
     "typescript": "~5.9.3",
     "vite": "^8.3.8",

@@ -7,7 +7,7 @@ import {
   PlaneGeometry,
   SphereGeometry,
 } from 'three';
-import { sampleWater } from '../sim/water';
+import { sampleWater } from '../../core/sim/water';
 
 /** Distant shore and a few racing marks, for scale. Original geometry. */
 export function makeCoast(): Group {

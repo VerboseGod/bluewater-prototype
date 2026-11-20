@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { apparentWind } from '../src/sim/wind';
-import { DEG, KT } from '../src/sim/math';
+import { apparentWind } from '../core/sim/wind';
+import { DEG, KT } from '../core/sim/math';
 import { makeSim, settle } from './support';
 
 describe('apparent wind', () => {

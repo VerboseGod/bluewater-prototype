@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { classifyImpact, resolveContact } from '../src/dock/contact';
-import { DEPTH, MAX_SET_SPEED, MOOR_MS, MOOR_REACH, bowOf } from '../src/dock/layout';
-import { canMakeFast } from '../src/dock/mooring';
-import { steerTo } from '../src/dock/practice';
-import { tipFor } from '../src/dock/score';
-import { DockSession } from '../src/dock/session';
-import { wrapPi } from '../src/sim/math';
-import { downwind, rudderAuthority, waterSpeed } from '../src/sim/lowspeed';
-import { Simulation } from '../src/sim/sim';
+import { classifyImpact, resolveContact } from '../core/dock/contact';
+import { DEPTH, MAX_SET_SPEED, MOOR_MS, MOOR_REACH, bowOf } from '../core/dock/layout';
+import { canMakeFast } from '../core/dock/mooring';
+import { steerTo } from '../core/dock/practice';
+import { tipFor } from '../core/dock/score';
+import { DockSession } from '../core/dock/session';
+import { wrapPi } from '../core/sim/math';
+import { downwind, rudderAuthority, waterSpeed } from '../core/sim/lowspeed';
+import { Simulation } from '../core/sim/sim';
 import type { InputState } from '../src/input';
 import { DT, makeSim } from './support';
 

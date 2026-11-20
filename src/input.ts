@@ -1,4 +1,5 @@
-import type { CoopKeys, PadAxes } from './coop/route';
+import type { CoopKeys, PadAxes } from '../core/coop/route';
+import { neutralInput, withSheetNet, type BoatInput } from '../core/input';
 import {
   freshRepeat,
   interpretPad,
@@ -7,6 +8,25 @@ import {
   type Remap,
   DEFAULT_REMAP,
 } from './input/standard';
+
+/** Map the shell's device state onto the engine-free input struct. */
+export function toBoatInput(input: InputState): BoatInput {
+  return withSheetNet({
+    ...neutralInput(),
+    steer: input.rudder,
+    sheetIn: input.sheetIn,
+    sheetOut: input.sheetOut,
+    hike: input.hike,
+    moveIn: input.moveIn,
+    anchor: input.anchorPressed,
+    moor: input.moorPressed,
+    scopeOut: input.scopeOut,
+    scopeIn: input.scopeIn,
+    paddle: !!input.paddle,
+    cycleWind: input.windPressed,
+    toggleTide: input.tidePressed,
+  });
+}
 
 export interface InputState {
   rudder: number;

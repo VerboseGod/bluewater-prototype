@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bluewater.local/schemas/coaching.schema.json",
+  "title": "Coaching and debrief lines",
+  "description": "Struggle hints and lesson debrief sentences. Arrays are level 1 then level 2. Debrief templates may contain {kept} and {quality}.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capsize", "byTheLee", "deathRoll", "irons", "stall", "heel", "pinned", "luffReach", "findWind", "debrief"
+  ],
+  "properties": {
+    "capsize": { "type": "string" },
+    "byTheLee": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "deathRoll": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "irons": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "stall": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "heel": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "pinned": { "type": "string" },
+    "luffReach": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "findWind": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "string" } },
+    "debrief": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tackNone", "tack", "gybeNone", "gybeLee", "gybeSlam", "gybeClean", "gybeOk",
+        "returnClean", "returnOk", "windClean", "windOk", "reachClean", "reachOk", "pointsClean", "pointsOk",
+        "stop", "irons", "capsize", "card"
+      ],
+      "properties": {
+        "tackNone": { "type": "string" },
+        "tack": { "type": "string" },
+        "gybeNone": { "type": "string" },
+        "gybeLee": { "type": "string" },
+        "gybeSlam": { "type": "string" },
+        "gybeClean": { "type": "string" },
+        "gybeOk": { "type": "string" },
+        "returnClean": { "type": "string" },
+        "returnOk": { "type": "string" },
+        "windClean": { "type": "string" },
+        "windOk": { "type": "string" },
+        "reachClean": { "type": "string" },
+        "reachOk": { "type": "string" },
+        "pointsClean": { "type": "string" },
+        "pointsOk": { "type": "string" },
+        "stop": { "type": "string" },
+        "irons": { "type": "string" },
+        "capsize": { "type": "string" },
+        "card": { "type": "string" }
+      }
+    }
+  }
+}

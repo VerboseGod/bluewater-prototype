@@ -73,9 +73,9 @@ export class Scoreboard {
   t0 = 0;
   tMoored: number | null = null;
   tHeld: number | null = null;
-  private gated = false;
-  private stopped = false;
-  private axis = 0;
+  gated = false;
+  stopped = false;
+  axis = 0;
 
   reset(time: number): void {
     this.approachKn = null;
