@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bluewater.local/schemas/fixture.schema.json",
+  "title": "Step trajectory fixture",
+  "description": "A fixed input script and the reference samples from core/step.ts. See docs/ENGINE_PORTING.md.",
+  "type": "object",
+  "required": ["name", "dt", "kind", "every", "script", "initial", "samples"],
+  "properties": {
+    "name": { "type": "string" },
+    "dt": { "type": "number", "description": "Fixed timestep, seconds" },
+    "kind": { "enum": ["boat", "dock"] },
+    "note": { "type": "string" },
+    "every": { "type": "integer", "minimum": 1, "description": "Sample period in ticks" },
+    "setup": { "type": "object" },
+    "script": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["steps"],
+        "properties": {
+          "steps": { "type": "integer", "minimum": 1 },
+          "steer": { "type": "number" },
+          "sheetIn": { "type": "number" },
+          "sheetOut": { "type": "number" },
+          "hike": { "type": "number" },
+          "moveIn": { "type": "number" },
+          "anchor": { "type": "boolean" },
+          "moor": { "type": "boolean" },
+          "scopeOut": { "type": "boolean" }
+        }
+      }
+    },
+    "initial": { "type": "object" },
+    "samples": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["i", "t", "x", "y", "heading", "speed", "heel", "sail", "capsizeCount", "tacks", "gybes"],
+        "properties": {
+          "i": { "type": "integer" },
+          "t": { "type": "number" },
+          "x": { "type": "number" },
+          "y": { "type": "number" },
+          "heading": { "type": "number" },
+          "speed": { "type": "number" },
+          "heel": { "type": "number" },
+          "sheet": { "type": "number" },
+          "boom": { "type": "number" },
+          "twa": { "type": "number" },
+          "awa": { "type": "number" },
+          "vFwd": { "type": "number" },
+          "leeway": { "type": "number" },
+          "crew": { "type": "number" },
+          "sail": { "type": "string" },
+          "capsized": { "type": "boolean" },
+          "capsizeCount": { "type": "integer" },
+          "tacks": { "type": "integer" },
+          "gybes": { "type": "integer" },
+          "moored": { "type": "boolean" },
+          "anchorDown": { "type": "boolean" },
+          "dist": { "type": "number" }
+        }
+      }
+    }
+  }
+}

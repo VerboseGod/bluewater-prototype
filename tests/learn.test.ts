@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LearnDirector } from '../src/learn/director';
+import { LearnDirector } from '../core/learn/director';
 import {
   LESSONS,
   byTheLee,
@@ -17,10 +17,10 @@ import {
   updateStruggle,
   type DockView,
   type SailSample,
-} from '../src/learn/model';
-import { pilotStick } from '../src/learn/pilot';
-import { PROGRESS_KEY, loadProgress, recordPass, saveProgress, type Kv } from '../src/learn/progress';
-import { Simulation } from '../src/sim/sim';
+} from '../core/learn/model';
+import { pilotStick } from '../core/learn/pilot';
+import { PROGRESS_KEY, loadProgress, recordPass, saveProgress, type Kv } from '../core/learn/progress';
+import { Simulation } from '../core/sim/sim';
 
 function sample(partial: Partial<SailSample> = {}): SailSample {
   return {

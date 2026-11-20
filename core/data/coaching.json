@@ -1,0 +1,53 @@
+{
+  "capsize": "Capsized. Ease with {lt} and wait for the boat to right.",
+  "byTheLee": [
+    "By the lee. The wind is on the same side as the boom, and it can gybe itself.",
+    "Still by the lee. Steer so the wind comes back onto the windward quarter."
+  ],
+  "deathRoll": [
+    "The boat is rolling. Sheet in a little with {rt} and hike with {a}, or it can death-roll.",
+    "That roll is building into a death roll. Sheet in with {rt} and hold {a}."
+  ],
+  "irons": [
+    "In irons. Push the stick away from the sail and wait.",
+    "Keep the stick away from the sail. When the bow falls off, sheet in with {rt}."
+  ],
+  "stall": [
+    "Stalled — sheeted too tight. Ease with {lt} until the telltales stream aft.",
+    "Still stalled. Ease more with {lt}. The leeward telltale should stream aft."
+  ],
+  "heel": [
+    "Heeling. Hold {a} and hike out to windward.",
+    "Still heeled. Hold {a} until the boat comes flat."
+  ],
+  "pinned": "Ease with {lt} so the sail can shake. Luffing is the point.",
+  "luffReach": [
+    "The sail is still luffing. Sheet in with {rt} until it goes quiet.",
+    "Keep {rt} held until the shaking just stops, then let go."
+  ],
+  "findWind": [
+    "Turn toward the wind arrow. The bow should meet the streaks.",
+    "The arrow on the water points to where the wind comes from. Steer the bow at it."
+  ],
+  "debrief": {
+    "tackNone": "No tack was recorded.",
+    "tack": "Speed kept {kept}% through the tack. Tack score {quality}. A clean one keeps about 60% and scores over 0.55: sheet eased, helm smooth, sailor across while the sail is light.",
+    "gybeNone": "No gybe was recorded.",
+    "gybeLee": "The wind got onto the same side as the boom — by the lee — and the boom can crash across on its own.",
+    "gybeSlam": "The boom came across hard. Help it across, duck, and move your weight as it crosses.",
+    "gybeClean": "Controlled gybe. You called gybe-oh, ducked, and stayed off by the lee.",
+    "gybeOk": "The gybe was under control. Next time, look behind the sail before you call it.",
+    "returnClean": "Head-to-wind, sail luffing, and made fast without a hard hit. That is how a dinghy stops.",
+    "returnOk": "You came back. Next time, luff earlier so the approach stays under about 1.5 kn.",
+    "windClean": "Bow into the wind, sail luffing, and you still had steerage. That arc is the no-go zone, about 45° either side of the wind.",
+    "windOk": "You found the no-go zone. It is about 45° either side of the wind. Ease the sheet as you turn in so you are not stuck in irons.",
+    "reachClean": "Beam reach, sail quiet, boat flat. The telltales stream aft when the sheet is right.",
+    "reachOk": "You crossed the wind. Trim until the shaking just stops, and hike if the rail digs in.",
+    "pointsClean": "Close-hauled, a reach, and a run. The wheel should have followed you around.",
+    "pointsOk": "You visited the points of sail. Close-hauled is toward the wind, a reach is across it, a run is away.",
+    "stop": "Lying-to. The sail is luffing and the boat has stopped. Bear away when you want to sail again.",
+    "irons": "Out of irons. The bow fell off, the sail filled, and you have drive again.",
+    "capsize": "If you capsize, ease the sheet and stay with the boat. It floats. Do not swim for shore.",
+    "card": "Read it once before you need it. The boat will still be here."
+  }
+}

@@ -1,4 +1,4 @@
-import { pointOfSail, type PointOfSail } from '../learn/model';
+import { pointOfSail, type PointOfSail } from '../../core/learn/model';
 
 export interface BoatFacts {
   twa: number;

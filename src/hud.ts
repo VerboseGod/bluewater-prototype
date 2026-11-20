@@ -1,11 +1,11 @@
-import { BUOY, CLEAT, SOLIDS } from './dock/layout';
-import type { DockReport } from './dock/score';
+import { BUOY, CLEAT, SOLIDS } from '../core/dock/layout';
+import type { DockReport } from '../core/dock/score';
 import { drawHarbourChart } from './harbour/chart';
-import { ASSUMPTIONS, BATHY_CREDIT, OSM_CREDIT } from './harbour/credits';
-import type { HarbourReport } from './harbour/session';
-import type { HarbourWorld } from './harbour/world';
-import { KT, RAD } from './sim/math';
-import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from './sim/sim';
+import { ASSUMPTIONS, BATHY_CREDIT, OSM_CREDIT } from '../core/harbour/credits';
+import type { HarbourReport } from '../core/harbour/session';
+import type { HarbourWorld } from '../core/harbour/world';
+import { KT, RAD } from '../core/sim/math';
+import { sailorStation, windwardSign, type ManeuverMark, type Simulation, type TrackPoint } from '../core/sim/sim';
 
 const HINT_HOLD = 3600;
 const HINT_FADE = 1100;

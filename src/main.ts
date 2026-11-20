@@ -2,11 +2,11 @@ import './style.css';
 import { enableGamepadEmulation } from './ui/watch';
 
 enableGamepadEmulation(navigator);
-import type { DockReport } from './dock/score';
-import type { HarbourReport } from './harbour/session';
-import { freshMemory, scriptedPads, type ScriptMemory } from './coop/script';
+import type { DockReport } from '../core/dock/score';
+import type { HarbourReport } from '../core/harbour/session';
+import { freshMemory, scriptedPads, type ScriptMemory } from '../core/coop/script';
 import { Game } from './game';
-import type { SimSnapshot } from './sim/sim';
+import type { SimSnapshot } from '../core/sim/sim';
 
 const root = document.querySelector<HTMLElement>('#app');
 if (!root) throw new Error('Missing #app');

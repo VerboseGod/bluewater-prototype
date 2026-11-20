@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KT, DEG } from '../src/sim/math';
+import { KT, DEG } from '../core/sim/math';
 import { courseHeading, makeSim, settle } from './support';
 
 describe('sailor targets', () => {

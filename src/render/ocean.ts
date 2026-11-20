@@ -9,8 +9,8 @@ import {
   Vector3,
   Vector4,
 } from 'three';
-import { WAVES } from '../sim/water';
-import type { Gust } from '../sim/wind';
+import { WAVES } from '../../core/sim/water';
+import type { Gust } from '../../core/sim/wind';
 import { buildGerstner, gerstnerAt, physicsChop, waveCountFor, type GerstnerWave } from './waves';
 
 const VERT = /* glsl */ `

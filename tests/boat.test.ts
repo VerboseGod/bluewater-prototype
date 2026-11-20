@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { rudderForces } from '../src/sim/hydro';
-import { RUDDER_STALL } from '../src/sim/constants';
-import { suggestedSheet } from '../src/sim/sail';
-import { DEG, KT, wrapPi } from '../src/sim/math';
+import { rudderForces } from '../core/sim/hydro';
+import { RUDDER_STALL } from '../core/sim/constants';
+import { suggestedSheet } from '../core/sim/sail';
+import { DEG, KT, wrapPi } from '../core/sim/math';
 import { makeSim, settle, courseHeading } from './support';
 
 describe('dinghy behaviour', () => {

@@ -17,7 +17,7 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three';
-import type { SimSnapshot } from '../sim/sim';
+import type { SimSnapshot } from '../../core/sim/sim';
 import { sailPoint } from './sail-mesh';
 import { tillerYaw } from './tiller';
 

@@ -1,0 +1,214 @@
+{
+  "openWater": {
+    "windSpeed": 5.66,
+    "windFrom": 1.5707963267948966,
+    "heading": 0,
+    "sheet": 0.06,
+    "demoSheet": 0.48,
+    "demoVx": 2.6,
+    "assisted": true,
+    "waves": true,
+    "steady": false
+  },
+  "dock": {
+    "pontoon": {
+      "minX": -4,
+      "maxX": 16,
+      "minY": 7,
+      "maxY": 9.2
+    },
+    "finger": {
+      "minX": 15.2,
+      "maxX": 16.5,
+      "minY": 3.2,
+      "maxY": 7
+    },
+    "breakwaterN": {
+      "minX": -8,
+      "maxX": 20,
+      "minY": 11.2,
+      "maxY": 13.4
+    },
+    "breakwaterE": {
+      "minX": 18.2,
+      "maxX": 20.2,
+      "minY": 1.5,
+      "maxY": 11.2
+    },
+    "cleatX": 5,
+    "buoy": {
+      "x": 11.6,
+      "y": 2.4,
+      "r": 0.55
+    },
+    "depth": 2,
+    "bow": 1.9,
+    "stern": 1.75,
+    "halfBeam": 0.64,
+    "fender": 0.16,
+    "alongsideGap": 0.02,
+    "start": {
+      "x": -1.7,
+      "y": 5.55,
+      "heading": 0.18,
+      "vx": 1.55,
+      "sheet": 0,
+      "boom": 1.35
+    },
+    "moorReach": 1,
+    "moorKn": 0.5,
+    "minScope": 3,
+    "goodScope": 5,
+    "maxSetSpeed": 0.45,
+    "tideKn": 0.3,
+    "windSpeed": 5.66,
+    "winds": [
+      {
+        "id": "offshore",
+        "label": "Offshore",
+        "from": 1.5707963267948966
+      },
+      {
+        "id": "onshore",
+        "label": "Onshore",
+        "from": -1.5707963267948966
+      },
+      {
+        "id": "along",
+        "label": "Along the pontoon",
+        "from": 3.141592653589793
+      }
+    ]
+  },
+  "learn": {
+    "windFrom": 1.5707963267948966,
+    "windSpeed": 5.66,
+    "launches": [
+      {
+        "id": "wind",
+        "world": "open",
+        "twaDeg": 90,
+        "speed": 2.3,
+        "sheet": 0.5,
+        "boom": 0.55
+      },
+      {
+        "id": "stop",
+        "world": "open",
+        "twaDeg": 96,
+        "speed": 2.5,
+        "sheet": 0.5,
+        "boom": 0.58
+      },
+      {
+        "id": "reach",
+        "world": "open",
+        "twaDeg": 42,
+        "speed": 2.15,
+        "sheet": 0.12,
+        "boom": 0.22
+      },
+      {
+        "id": "points",
+        "world": "open",
+        "twaDeg": 90,
+        "speed": 2.6,
+        "sheet": 0.5,
+        "boom": 0.62
+      },
+      {
+        "id": "tack",
+        "world": "open",
+        "twaDeg": 54,
+        "speed": 2.45,
+        "sheet": 0.84,
+        "boom": 0.34
+      },
+      {
+        "id": "irons",
+        "world": "open",
+        "twaDeg": 6,
+        "speed": 0.25,
+        "sheet": 0.72,
+        "boom": 0.12
+      },
+      {
+        "id": "return",
+        "world": "dock",
+        "heading": 0.18,
+        "x": -1.7,
+        "y": 5.55,
+        "vx": 1.55,
+        "vy": 0,
+        "sheet": 0,
+        "boom": 1.35
+      },
+      {
+        "id": "gybe",
+        "world": "open",
+        "twaDeg": 152,
+        "speed": 2.5,
+        "sheet": 0.4,
+        "boom": 1.05
+      },
+      {
+        "id": "card",
+        "world": "open",
+        "twaDeg": 90,
+        "speed": 1.4,
+        "sheet": 0.4,
+        "boom": 0.5
+      }
+    ]
+  },
+  "coop": {
+    "windSpeed": 5.66,
+    "windFrom": 1.5707963267948966,
+    "steady": true,
+    "waves": false,
+    "assisted": true,
+    "placeTwaDeg": 46,
+    "placeSpeedKn": 4.6,
+    "placeSign": 1,
+    "leftMark": {
+      "x": 4,
+      "y": 24
+    },
+    "rightMark": {
+      "x": 18,
+      "y": 38
+    },
+    "markRadius": 14,
+    "finish": {
+      "x": 0,
+      "y": 0
+    },
+    "finishRadius": 14,
+    "awayDistance": 18
+  },
+  "harbour": {
+    "windSpeed": 5.66,
+    "winds": [
+      {
+        "id": "west",
+        "label": "Sea breeze, west",
+        "from": 3.141592653589793
+      },
+      {
+        "id": "wnw",
+        "label": "Sea breeze, WNW",
+        "from": 2.748893571891069
+      },
+      {
+        "id": "nw",
+        "label": "Sea breeze, NW",
+        "from": 2.356194490192345
+      },
+      {
+        "id": "sw",
+        "label": "South-west",
+        "from": -2.356194490192345
+      }
+    ]
+  }
+}

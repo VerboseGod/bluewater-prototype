@@ -1,4 +1,4 @@
-import type { CoopReport, CoopView } from './session';
+import type { CoopReport, CoopView } from '../../core/coop/session';
 
 /** Join card, the split helm/crew panels, and the per-role debrief. */
 export class CoopOverlay {

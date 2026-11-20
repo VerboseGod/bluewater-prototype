@@ -1,11 +1,14 @@
-/** A short upwind beat: two marks, three tacks, and back to the start. */
+/** A short upwind beat: two marks, three tacks, and back to the start. Layout is core/data/scenarios.json. */
+import scenarios from '../data/scenarios.json';
 
-export const LEFT_MARK = { x: 4, y: 24 };
-export const RIGHT_MARK = { x: 18, y: 38 };
-export const MARK_RADIUS = 14;
-export const FINISH = { x: 0, y: 0 };
-export const FINISH_RADIUS = 14;
-export const AWAY_DISTANCE = 18;
+const coop = scenarios.coop;
+
+export const LEFT_MARK = coop.leftMark;
+export const RIGHT_MARK = coop.rightMark;
+export const MARK_RADIUS = coop.markRadius;
+export const FINISH = coop.finish;
+export const FINISH_RADIUS = coop.finishRadius;
+export const AWAY_DISTANCE = coop.awayDistance;
 
 export interface DrillProgress {
   phase: 'join' | 'sail' | 'done';

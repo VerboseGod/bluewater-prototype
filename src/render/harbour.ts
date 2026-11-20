@@ -13,8 +13,8 @@ import {
   MeshStandardMaterial,
   SphereGeometry,
 } from 'three';
-import type { HarbourState } from '../dock/session';
-import { BREAKWATER_E, BREAKWATER_N, BUOY, CLEAT, FINGER, PONTOON, bowOf } from '../dock/layout';
+import type { HarbourState } from '../../core/dock/session';
+import { BREAKWATER_E, BREAKWATER_N, BUOY, CLEAT, FINGER, PONTOON, bowOf } from '../../core/dock/layout';
 
 const DECK = new MeshStandardMaterial({ color: '#b7c0c4', roughness: 0.72, metalness: 0.08 });
 const EDGE = new MeshStandardMaterial({ color: '#5e6d76', roughness: 0.6, metalness: 0.12 });

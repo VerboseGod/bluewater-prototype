@@ -1,6 +1,6 @@
-import { suggestedSheet } from '../src/sim/sail';
-import { Simulation, type Controls } from '../src/sim/sim';
-import { DEG } from '../src/sim/math';
+import { suggestedSheet } from '../core/sim/sail';
+import { Simulation, type Controls } from '../core/sim/sim';
+import { DEG } from '../core/sim/math';
 
 export const DT = 1 / 60;
 

@@ -1,6 +1,6 @@
-import type { InputState } from '../input';
+import type { ScenarioInput as InputState } from '../input';
 import { KT } from '../sim/math';
-import { Simulation } from '../sim/sim';
+import { Simulation, type BoatState } from '../sim/sim';
 import { AnchorRig } from './anchor';
 import { resolveContact, type ImpactClass } from './contact';
 import { DOCK_WIND, START, TIDE_MS, WINDS, type WindId } from './layout';
@@ -25,6 +25,47 @@ export interface HarbourState {
 export interface Strip {
   text: string;
   kind: 'info' | 'good' | 'bad';
+}
+
+export interface AnchorState {
+  down: boolean;
+  x: number;
+  y: number;
+  rode: number;
+  setSpeed: number;
+  dragged: number;
+  held: boolean;
+  dragging: boolean;
+}
+
+export interface ScoreState {
+  approachKn: number | null;
+  impactMs: number;
+  impactClass: ImpactClass;
+  distAtStop: number | null;
+  angleAtStopDeg: number | null;
+  t0: number;
+  tMoored: number | null;
+  tHeld: number | null;
+  gated: boolean;
+  stopped: boolean;
+  axis: number;
+}
+
+/** Plain dock attempt. `stepDock` is one fixed tick of this struct. */
+export interface DockState {
+  boat: BoatState;
+  windIndex: number;
+  tide: boolean;
+  moored: boolean;
+  mooredOnce: boolean;
+  touching: boolean;
+  impactClass: ImpactClass;
+  impactMs: number;
+  reject: { text: string; until: number } | null;
+  assisted: boolean;
+  rig: AnchorState;
+  score: ScoreState;
 }
 
 /**
@@ -264,6 +305,82 @@ export class DockSession {
 
   report(): DockReport {
     return this.score.report(this.sim, this.rig, this.mooredOnce, this.moored);
+  }
+
+  toState(): DockState {
+    const rig = this.rig;
+    const score = this.score;
+    return {
+      boat: this.sim.toState(),
+      windIndex: this.windIndex,
+      tide: this.tide,
+      moored: this.moored,
+      mooredOnce: this.mooredOnce,
+      touching: this.touching,
+      impactClass: this.impactClass,
+      impactMs: this.impactMs,
+      reject: this.reject ? { ...this.reject } : null,
+      assisted: this.sim.assisted,
+      rig: {
+        down: rig.down,
+        x: rig.x,
+        y: rig.y,
+        rode: rig.rode,
+        setSpeed: rig.setSpeed,
+        dragged: rig.dragged,
+        held: rig.held,
+        dragging: rig.dragging,
+      },
+      score: {
+        approachKn: score.approachKn,
+        impactMs: score.impactMs,
+        impactClass: score.impactClass,
+        distAtStop: score.distAtStop,
+        angleAtStopDeg: score.angleAtStopDeg,
+        t0: score.t0,
+        tMoored: score.tMoored,
+        tHeld: score.tHeld,
+        gated: score.gated,
+        stopped: score.stopped,
+        axis: score.axis,
+      },
+    };
+  }
+
+  static fromState(state: DockState): DockSession {
+    const windId = WINDS[state.windIndex]?.id as WindId | undefined;
+    const session = new DockSession({ demo: false, assisted: state.assisted, wind: windId });
+    session.windIndex = state.windIndex;
+    session.tide = state.tide;
+    session.moored = state.moored;
+    session.mooredOnce = state.mooredOnce;
+    session.touching = state.touching;
+    session.impactClass = state.impactClass;
+    session.impactMs = state.impactMs;
+    session.reject = state.reject ? { ...state.reject } : null;
+    session.rig.down = state.rig.down;
+    session.rig.x = state.rig.x;
+    session.rig.y = state.rig.y;
+    session.rig.rode = state.rig.rode;
+    session.rig.setSpeed = state.rig.setSpeed;
+    session.rig.dragged = state.rig.dragged;
+    session.rig.held = state.rig.held;
+    session.rig.dragging = state.rig.dragging;
+    const score = session.score;
+    score.approachKn = state.score.approachKn;
+    score.impactMs = state.score.impactMs;
+    score.impactClass = state.score.impactClass;
+    score.distAtStop = state.score.distAtStop;
+    score.angleAtStopDeg = state.score.angleAtStopDeg;
+    score.t0 = state.score.t0;
+    score.tMoored = state.score.tMoored;
+    score.tHeld = state.score.tHeld;
+    score.gated = state.score.gated;
+    score.stopped = state.score.stopped;
+    score.axis = state.score.axis;
+    session.sim.applyState(state.boat);
+    session.applyTide();
+    return session;
   }
 
   view(): HarbourState {

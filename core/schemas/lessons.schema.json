@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bluewater.local/schemas/lessons.schema.json",
+  "title": "Learn-mode lessons",
+  "description": "Lesson copy and gates. The state machine in core/learn reads this file. Wording is content, not code.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pointLabels", "lessons"],
+  "properties": {
+    "pointLabels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["no-go", "close-hauled", "close-reach", "beam-reach", "broad-reach", "run"],
+      "properties": {
+        "no-go": { "type": "string" },
+        "close-hauled": { "type": "string" },
+        "close-reach": { "type": "string" },
+        "beam-reach": { "type": "string" },
+        "broad-reach": { "type": "string" },
+        "run": { "type": "string" }
+      }
+    },
+    "lessons": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "goal", "blurb", "steps"],
+        "properties": {
+          "id": {
+            "enum": ["wind", "stop", "reach", "points", "tack", "irons", "return", "gybe", "capsize", "safety", "mob", "rules"]
+          },
+          "title": { "type": "string" },
+          "goal": { "type": "string" },
+          "blurb": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "gate", "hold", "say"],
+              "properties": {
+                "id": { "type": "string" },
+                "gate": { "type": "string" },
+                "hold": { "type": "number", "minimum": 0, "description": "Seconds the gate must stay true" },
+                "say": { "type": "string", "description": "Coach line. {ls} {rt} {lt} {a} {b} {rb} are glyph tokens." }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

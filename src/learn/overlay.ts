@@ -1,5 +1,5 @@
-import { POINT_LABEL, type PointOfSail, type TackRecord } from './model';
-import type { LearnView } from './director';
+import { POINT_LABEL, type PointOfSail, type TackRecord } from '../../core/learn/model';
+import type { LearnView } from '../../core/learn/director';
 import { coachHtml, starText } from './text';
 
 const BANDS: { id: PointOfSail; from: number; to: number; color: string }[] = [

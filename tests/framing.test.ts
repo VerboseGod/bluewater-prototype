@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { chaseAim } from '../src/render/chase';
 import { MAST_X, sailPoint } from '../src/render/sail-mesh';
 import { hintOpacity, stripOpacity } from '../src/hud';
-import { windwardSign } from '../src/sim/sim';
+import { windwardSign } from '../core/sim/sim';
 
 describe('chase framing', () => {
   it('sits behind the boat on the windward quarter and looks above the hull', () => {

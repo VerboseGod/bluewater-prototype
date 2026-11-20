@@ -34,19 +34,23 @@ export class WindField {
   /**
    * Optional local edit applied after the open-water sample. Null leaves the
    * sample untouched, which is what open water and the physics tests use.
+   * A port re-attaches this from the scenario; it is not part of plain state.
    */
   modify: ((x: number, y: number, sample: WindSample) => WindSample) | null = null;
-  private nextSpawn = 2.5;
+  /** Seconds until the next puff. Part of the plain wind state. */
+  nextSpawn = 2.5;
+  /** LCG state. Same sequence as the previous closure for seed 1. */
+  rngState = 1;
   private rng: () => number;
 
   constructor(speed: number, from: number, steady: boolean, seed = 1) {
     this.baseSpeed = speed;
     this.baseFrom = from;
     this.steady = steady;
-    let s = seed >>> 0 || 1;
+    this.rngState = seed >>> 0 || 1;
     this.rng = () => {
-      s = (Math.imul(1664525, s) + 1013904223) >>> 0;
-      return s / 4294967296;
+      this.rngState = (Math.imul(1664525, this.rngState) + 1013904223) >>> 0;
+      return this.rngState / 4294967296;
     };
   }
 

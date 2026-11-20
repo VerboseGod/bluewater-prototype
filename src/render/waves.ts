@@ -1,4 +1,4 @@
-import { WAVES, type Wave } from '../sim/water';
+import { WAVES, type Wave } from '../../core/sim/water';
 
 /** Visual-only swell. The hull sampler in `sim/water` is not touched. */
 export interface GerstnerWave {
