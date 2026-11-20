@@ -2,7 +2,19 @@ import { DEG, RAD, wrapPi } from '../sim/math';
 import type { SailMode } from '../sim/sail';
 import type { SimSnapshot } from '../sim/sim';
 
-export type LessonId = 'wind' | 'reach' | 'points' | 'tack' | 'gybe' | 'return';
+export type LessonId =
+  | 'wind'
+  | 'stop'
+  | 'reach'
+  | 'points'
+  | 'tack'
+  | 'irons'
+  | 'return'
+  | 'gybe'
+  | 'capsize'
+  | 'safety'
+  | 'mob'
+  | 'rules';
 
 export type GateId =
   | 'nudged'
@@ -22,13 +34,17 @@ export type GateId =
   | 'gybe-settled'
   | 'sheet-flying'
   | 'head-to-stop'
-  | 'made-fast';
+  | 'made-fast'
+  | 'lying-to'
+  | 'fell-off'
+  | 'filled-away'
+  | 'shown';
 
 export type PointOfSail = 'no-go' | 'close-hauled' | 'close-reach' | 'beam-reach' | 'broad-reach' | 'run';
 
 export const POINT_LABEL: Record<PointOfSail, string> = {
   'no-go': 'No-go',
-  'close-hauled': 'Close-hauled',
+  'close-hauled': 'Close hauled',
   'close-reach': 'Close reach',
   'beam-reach': 'Beam reach',
   'broad-reach': 'Broad reach',
@@ -36,13 +52,13 @@ export const POINT_LABEL: Record<PointOfSail, string> = {
 };
 
 /**
- * Bands for this dinghy. Inside about 35° it stops and the sail luffs.
- * Close-hauled is near 45°. A beam reach is the wind on the side.
- * A run is the wind aft of about 150°. Dead downwind is near 180°.
+ * Bands a sailor is taught. The no-go zone is about 45° either side of the
+ * true wind. Close hauled starts at that edge. A beam reach is the wind on
+ * the side. A run is the wind aft of about 150°.
  */
 export function pointOfSail(twaRad: number): PointOfSail {
   const deg = Math.abs(twaRad) * RAD;
-  if (deg < 35) return 'no-go';
+  if (deg < 45) return 'no-go';
   if (deg < 62) return 'close-hauled';
   if (deg < 78) return 'close-reach';
   if (deg < 112) return 'beam-reach';
@@ -407,6 +423,14 @@ export function gateOpen(id: GateId, sample: SailSample, mem: LessonMemory): boo
       return Math.abs(sample.twa) < 40 * DEG && (sample.sail === 'luffing' || sample.inIrons || sample.speed < 0.9);
     case 'made-fast':
       return comingBackGrade(mem.dock, sample).pass;
+    case 'lying-to':
+      return Math.abs(sample.twa) < 42 * DEG && sample.sheet < 0.35 && (sample.sail === 'luffing' || sample.inIrons || sample.speed < 1.2);
+    case 'fell-off':
+      return Math.abs(sample.twa) > 50 * DEG && !sample.inIrons;
+    case 'filled-away':
+      return sample.vFwd > 1 && sample.sail === 'trimmed' && point !== 'no-go' && !sample.inIrons;
+    case 'shown':
+      return mem.stepTime > 0.3;
     default:
       return false;
   }
@@ -451,10 +475,10 @@ export function debriefLine(id: LessonId, stars: number, mem: LessonMemory): str
     const g = mem.gybes[mem.gybes.length - 1];
     if (!g) return 'No gybe was recorded.';
     if (g.byTheLee) return 'The wind got onto the same side as the boom — by the lee — and the boom can crash across on its own.';
-    if (!g.controlled) return 'The boom came across hard. Leave a little sheet on, and move your weight as it crosses.';
+    if (!g.controlled) return 'The boom came across hard. Help it across, duck, and move your weight as it crosses.';
     return stars === 3
-      ? 'Controlled gybe. The sheet was on, the boom did not slam, and you stayed off by the lee.'
-      : 'The gybe was under control. Sheet a touch more next time so the roll stays small.';
+      ? 'Controlled gybe. You called gybe-oh, ducked, and stayed off by the lee.'
+      : 'The gybe was under control. Next time, look behind the sail before you call it.';
   }
   if (id === 'return') {
     return stars === 3
@@ -463,8 +487,20 @@ export function debriefLine(id: LessonId, stars: number, mem: LessonMemory): str
   }
   if (id === 'wind') {
     return stars === 3
-      ? 'Bow into the wind, sail luffing, and you still had steerage. That arc is the no-go zone.'
-      : 'You found the no-go zone. Next time, ease the sheet as you turn in so you are not stuck in irons.';
+      ? 'Bow into the wind, sail luffing, and you still had steerage. That arc is the no-go zone, about 45° either side of the wind.'
+      : 'You found the no-go zone. It is about 45° either side of the wind. Ease the sheet as you turn in so you are not stuck in irons.';
+  }
+  if (id === 'stop') {
+    return 'Lying-to. The sail is luffing and the boat has stopped. Bear away when you want to sail again.';
+  }
+  if (id === 'irons') {
+    return 'Out of irons. The bow fell off, the sail filled, and you have drive again.';
+  }
+  if (id === 'capsize') {
+    return 'If you capsize, ease the sheet and stay with the boat. It floats. Do not swim for shore.';
+  }
+  if (id === 'safety' || id === 'mob' || id === 'rules') {
+    return 'Read it once before you need it. The boat will still be here.';
   }
   if (id === 'reach') {
     return stars === 3
@@ -492,12 +528,14 @@ export interface LessonDef {
   steps: LessonStep[];
 }
 
+const CARD = (id: string, say: string): LessonStep => ({ id, gate: 'shown', hold: 2.2, say });
+
 export const LESSONS: readonly LessonDef[] = [
   {
     id: 'wind',
-    title: 'Where the wind comes from',
-    goal: 'Point the bow into the wind until the sail luffs. That is the no-go zone.',
-    blurb: 'Find the wind. The sail shakes when you point into it.',
+    title: 'Wind and no-go zone',
+    goal: 'Find the wind and point into the no-go zone, about 45° either side of it.',
+    blurb: 'The sail shakes when you point too close to the wind.',
     steps: [
       {
         id: 'look',
@@ -515,7 +553,33 @@ export const LESSONS: readonly LessonDef[] = [
         id: 'luff',
         gate: 'luffing-nogo',
         hold: 2,
-        say: 'Hold it. The sail is luffing. You are in the no-go zone.',
+        say: 'Hold it. You are in the no-go zone, about 45° either side of the wind. The sail is luffing and there is no drive.',
+      },
+    ],
+  },
+  {
+    id: 'stop',
+    title: 'Stopping (lying-to)',
+    goal: 'Ease the sheet and turn toward the wind until the boat lies to and stops.',
+    blurb: 'Let the sail fly, then point into the wind.',
+    steps: [
+      {
+        id: 'ease',
+        gate: 'sheet-flying',
+        hold: 0.45,
+        say: 'To stop, ease the sheet with {lt} until the sail luffs. Do not keep driving.',
+      },
+      {
+        id: 'luff',
+        gate: 'head-to-stop',
+        hold: 0.6,
+        say: 'Turn the bow toward the wind with {ls}. Let the boat slow down.',
+      },
+      {
+        id: 'lie',
+        gate: 'lying-to',
+        hold: 1.1,
+        say: 'Hold it. You are lying-to: the sail is luffing and the boat has nearly stopped. Bear away when you want to sail again.',
       },
     ],
   },
@@ -541,7 +605,7 @@ export const LESSONS: readonly LessonDef[] = [
         id: 'flat',
         gate: 'beam-flat',
         hold: 2.2,
-        say: 'If the boat heels, hold {a} and hike. A flat boat keeps its speed.',
+        say: 'If the boat heels, hold {a} and hike out to windward. A flat boat keeps its speed.',
       },
     ],
   },
@@ -549,13 +613,13 @@ export const LESSONS: readonly LessonDef[] = [
     id: 'points',
     title: 'Points of sail',
     goal: 'Sail close-hauled, a reach, and a run. The wheel shows which one you are on.',
-    blurb: 'Close-hauled, a reach, then a run.',
+    blurb: 'Close hauled, a reach, then a run.',
     steps: [
       {
         id: 'close',
         gate: 'close-hauled-sailing',
         hold: 1.6,
-        say: 'Sail close-hauled. Toward the wind, but not into the no-go. Sheet in with {rt}.',
+        say: 'Sail close hauled. Toward the wind, but stay outside the no-go, about 45° off it. Sheet in with {rt}.',
       },
       {
         id: 'reach',
@@ -573,86 +637,151 @@ export const LESSONS: readonly LessonDef[] = [
   },
   {
     id: 'tack',
-    title: 'Tacking',
-    goal: 'Tack onto the other close-hauled. Call it, steer through, change sides, keep your speed.',
-    blurb: 'Ready about, lee-oh, through the wind, then the speed back.',
+    title: 'Tack',
+    goal: 'Look around, call it, push the tiller away, and come out with speed.',
+    blurb: 'Ready about, lee-oh, then bear away to build speed.',
     steps: [
       {
         id: 'settle',
         gate: 'close-hauled-sailing',
         hold: 4.5,
-        say: 'Settle close-hauled, sail full, boat moving. You are on a tack.',
+        say: 'Settle close hauled, sail full, boat moving. Look around before you tack.',
       },
       {
         id: 'through',
         gate: 'tack-done',
         hold: 0.25,
-        say: 'Call ready about, then lee-oh. Ease with {lt} and steer through the wind.',
+        say: 'Call Ready about. Call Lee-oh as you push the tiller away with {ls} and ease with {lt}.',
       },
       {
         id: 'cross',
         gate: 'sides-changed',
         hold: 0.45,
-        say: 'Cross the boat. {b} brings you in, then {a} hikes you out on the new side.',
+        say: 'Cross the boat facing forward. Change hands. {b} brings you in, then {a} hikes you out on the new windward side.',
       },
       {
         id: 'regain',
         gate: 'speed-back',
         hold: 3.2,
-        say: 'Sheet in with {rt} on the new tack and let the speed come back.',
+        say: 'Bear away slightly and sheet in with {rt} so the boat builds speed on the new tack.',
       },
     ],
   },
   {
-    id: 'gybe',
-    title: 'Gybing safely',
-    goal: 'Gybe on a run, under control. Stay off by the lee, and do not let the boat death-roll.',
-    blurb: 'A controlled gybe. Sheet on, weight across, no slam.',
+    id: 'irons',
+    title: 'Out of irons',
+    goal: 'The boat is stopped, head to wind. Fall off, fill the sail, and sail again.',
+    blurb: 'No drive. Push the tiller so the bow falls off the wind.',
     steps: [
       {
-        id: 'prepare',
-        gate: 'run-prepared',
-        hold: 1.3,
-        say: 'Bear away onto a run. Ease with {lt}, but leave a little sheet on.',
+        id: 'off',
+        gate: 'fell-off',
+        hold: 0.45,
+        say: 'You are in irons, no drive. Push the tiller with {ls} so the bow falls off the wind. Wait for the boat to move.',
       },
       {
-        id: 'through',
-        gate: 'gybe-done',
-        hold: 0.25,
-        say: 'Call stand by to gybe. Steer the stern through the wind and cross as the boom comes over.',
-      },
-      {
-        id: 'settle',
-        gate: 'gybe-settled',
-        hold: 1.4,
-        say: 'New gybe. Sheet enough to stop the roll, and keep the wind on the windward quarter.',
+        id: 'fill',
+        gate: 'filled-away',
+        hold: 1.1,
+        say: 'The bow is off. Sheet in with {rt} and bear away a little more until the sail draws.',
       },
     ],
   },
   {
     id: 'return',
-    title: 'Coming back',
-    goal: 'Approach the pontoon head-to-wind and stop. Make fast once the boat has stopped.',
-    blurb: 'Let the sail fly, point into the wind, and stop at the dock.',
+    title: 'Return to the pontoon',
+    goal: 'Approach on a reach, depowered, and luff up alongside at walking pace.',
+    blurb: 'Slow approach. Keep an escape route. Never fend off.',
     steps: [
       {
         id: 'fly',
         gate: 'sheet-flying',
         hold: 0.6,
-        say: 'Let the sail fly. Hold {lt} so you are not driving at the pontoon.',
+        say: 'Approach on a close reach or a reach. Ease with {lt} so the sail is depowered. Walking pace, not a charge.',
       },
       {
         id: 'head',
         gate: 'head-to-stop',
         hold: 0.7,
-        say: 'Steer the bow into the wind with {ls}. Head-to-wind is how a dinghy stops.',
+        say: 'Luff up alongside with {ls}. Keep an escape route. If you are too fast, bear away and go round again. Never fend off with your hands or your feet.',
       },
       {
         id: 'fast',
         gate: 'made-fast',
         hold: 0.4,
-        say: 'Glide in under half a knot. Within a metre, {rb} throws the mooring line.',
+        say: 'Stopped, within a metre, {rb} makes fast. If the boat is still driving, abort and go round.',
       },
+    ],
+  },
+  {
+    id: 'gybe',
+    title: 'Gybe (extra)',
+    goal: 'Bear away to a run, check the area, call gybe-oh, and duck.',
+    blurb: 'Extra. A controlled gybe, and a by-the-lee warning.',
+    steps: [
+      {
+        id: 'prepare',
+        gate: 'run-prepared',
+        hold: 1.3,
+        say: 'Bear away to a run. Ease with {lt}. Look behind the sail and check the area is clear.',
+      },
+      {
+        id: 'through',
+        gate: 'gybe-done',
+        hold: 0.25,
+        say: 'Call Gybe-oh. Help the boom across, DUCK, bring the tiller to the centre, change sides, and straighten up.',
+      },
+      {
+        id: 'settle',
+        gate: 'gybe-settled',
+        hold: 1.4,
+        say: 'Straighten up on the new gybe. If the wind is on the same side as the boom you are by the lee, and the boom can crash across. Steer so the wind stays on the windward side.',
+      },
+    ],
+  },
+  {
+    id: 'capsize',
+    title: 'Capsize (extra)',
+    goal: 'Know why a dinghy capsizes, and what you do when it does.',
+    blurb: 'Extra. Ease the sheet. Stay with the boat.',
+    steps: [
+      CARD('why', 'A capsize comes from too much sail, a hike held through a lull, or a gybe that rolls you. Ease the sheet early.'),
+      CARD('do', 'If you capsize, stay with the boat. It floats. Climb onto the centreboard and right it. Do not swim for shore.'),
+      CARD('after', 'Once it is up, bail, count the crew, and sail only when everyone is back aboard.'),
+    ],
+  },
+  {
+    id: 'safety',
+    title: 'Safety',
+    goal: 'Four things before you leave the shore.',
+    blurb: 'Lifejacket, forecast, a person ashore, stay with the boat.',
+    steps: [
+      CARD('jacket', 'Wear a lifejacket before you leave the shore. Clip it. This is not optional.'),
+      CARD('forecast', 'Check the forecast. If the wind is rising or a storm is due, stay ashore.'),
+      CARD('ashore', 'Tell someone ashore where you are going and when you will be back.'),
+      CARD('stay', 'If you capsize or fall in, stay with the boat. A dinghy is easier to see than a person.'),
+    ],
+  },
+  {
+    id: 'mob',
+    title: 'Man overboard',
+    goal: 'The basics if someone goes in the water.',
+    blurb: 'Shout, point, keep them in sight, and stop the boat.',
+    steps: [
+      CARD('shout', 'Shout and point. Do not jump in after them. One person in the water is enough.'),
+      CARD('sight', 'Keep the person in sight. Throw a line or anything that floats if you have it.'),
+      CARD('return', 'Sail back on a reach, stop to windward of them, and help them in. Stay with the boat.'),
+    ],
+  },
+  {
+    id: 'rules',
+    title: 'Right of way',
+    goal: 'Three rules that keep boats apart.',
+    blurb: 'Port gives way. Windward gives way. The overtaker keeps clear.',
+    steps: [
+      CARD('port', 'A boat on port tack gives way to a boat on starboard tack.'),
+      CARD('windward', 'The windward boat gives way to the leeward boat.'),
+      CARD('overtake', 'The overtaking boat keeps clear. These are the basics, not a substitute for the real rules.'),
     ],
   },
 ];
@@ -693,16 +822,10 @@ function openLaunch(index: number, twaDeg: number, speed: number, sheet: number,
   };
 }
 
-export function launchFor(index: number): LessonLaunch {
-  const i = Math.max(0, Math.min(LESSONS.length - 1, index));
-  if (i === 0) return openLaunch(0, 90, 2.3, 0.5, 0.55);
-  if (i === 1) return openLaunch(1, 42, 2.15, 0.12, 0.22);
-  if (i === 2) return openLaunch(2, 90, 2.6, 0.5, 0.62);
-  if (i === 3) return openLaunch(3, 48, 2.45, 0.84, 0.34);
-  if (i === 4) return openLaunch(4, 152, 2.5, 0.4, 1.05);
+function dockLaunch(index: number): LessonLaunch {
   return {
     id: 'return',
-    index: 5,
+    index,
     world: 'dock',
     windFrom: TEACH_WIND,
     windSpeed: TEACH_SPEED,
@@ -714,4 +837,18 @@ export function launchFor(index: number): LessonLaunch {
     sheet: 0,
     boom: 1.35,
   };
+}
+
+export function launchFor(index: number): LessonLaunch {
+  const i = Math.max(0, Math.min(LESSONS.length - 1, index));
+  const id = LESSONS[i].id;
+  if (id === 'wind') return openLaunch(i, 90, 2.3, 0.5, 0.55);
+  if (id === 'stop') return openLaunch(i, 96, 2.5, 0.5, 0.58);
+  if (id === 'reach') return openLaunch(i, 42, 2.15, 0.12, 0.22);
+  if (id === 'points') return openLaunch(i, 90, 2.6, 0.5, 0.62);
+  if (id === 'tack') return openLaunch(i, 54, 2.45, 0.84, 0.34);
+  if (id === 'irons') return openLaunch(i, 6, 0.25, 0.72, 0.12);
+  if (id === 'return') return dockLaunch(i);
+  if (id === 'gybe') return openLaunch(i, 152, 2.5, 0.4, 1.05);
+  return openLaunch(i, 90, 1.4, 0.4, 0.5);
 }

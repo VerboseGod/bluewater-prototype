@@ -230,8 +230,8 @@ export class Hud {
   }
 
   setPaused(paused: boolean): void {
-    this.debrief.classList.toggle('hidden', !paused);
-    this.pauseBtn.textContent = paused ? 'Resume' : 'Debrief';
+    this.debrief.classList.add('hidden');
+    this.pauseBtn.textContent = paused ? 'Resume' : 'Pause';
   }
 
   setScenario(mode: 'open' | 'dock' | 'harbour' | 'learn' | 'coop'): void {
@@ -255,12 +255,15 @@ export class Hud {
     if (mode === 'open') this.strip.classList.add('hidden');
   }
 
-  setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info'): void {
+  private stripSticky = false;
+
+  setStrip(text: string | null, kind: 'info' | 'good' | 'bad' = 'info', sticky = false): void {
     if ((this.scenario !== 'dock' && this.scenario !== 'harbour' && this.scenario !== 'learn') || !text) {
       this.strip.classList.add('hidden');
       this.stripText = '';
       return;
     }
+    this.stripSticky = sticky;
     if (text !== this.stripText) {
       this.stripText = text;
       this.stripAt = performance.now();
@@ -269,6 +272,13 @@ export class Hud {
     if (kind !== 'info') this.strip.classList.add(kind);
     this.strip.textContent = text;
     this.fadeStrip();
+  }
+
+  pulse(which: 'sheet' | 'heel' | 'sailor'): void {
+    const el = which === 'sheet' ? this.sheetFill : which === 'heel' ? this.heelFill : this.sailorFill;
+    el.classList.remove('pulse');
+    void el.offsetWidth;
+    el.classList.add('pulse');
   }
 
   setFps(fps: number): void {
@@ -291,13 +301,14 @@ export class Hud {
     this.qualityBtn.textContent = quality === 'high' ? 'High' : 'Low';
     if (this.scenario === 'open') this.link.textContent = s.gust > 1.12 ? 'Gust' : 'Steady';
     const sheetPct = s.sheet * 100;
-    this.sheetFill.style.width = `${sheetPct}%`;
+      this.sheetFill.style.width = `${sheetPct}%`;
     this.sheetMark.style.left = sim.assisted ? `${s.suggestedSheet * 100}%` : '-10px';
     this.sheetMark.style.display = sim.assisted ? 'block' : 'none';
-    const word = s.inIrons ? 'In irons' : s.sail === 'aback' ? 'Aback' : s.sail[0].toUpperCase() + s.sail.slice(1);
+    const waiting = s.speed < 0.35 && s.sail === 'stalled' && !s.inIrons;
+    const word = s.inIrons ? 'In irons' : waiting ? 'Waiting' : s.sail === 'aback' ? 'Aback' : s.sail[0].toUpperCase() + s.sail.slice(1);
     const braking = s.rudderStalled && Math.abs(s.rudder) > 0.55;
     this.sheetWord.textContent = word + (s.planing ? ' · planing' : '') + (braking ? ' · rudder braking' : '');
-    this.sheetWord.className = `state-word ${s.inIrons ? 'luffing' : s.sail}`;
+    this.sheetWord.className = `state-word ${waiting ? '' : s.inIrons ? 'luffing' : s.sail}`;
     const heelDeg = s.heel * RAD;
     const heelPct = Math.max(0, Math.min(100, 50 + heelDeg));
     this.heelFill.style.width = `${heelPct}%`;
@@ -327,6 +338,11 @@ export class Hud {
 
   private fadeStrip(): void {
     if (this.strip.classList.contains('hidden')) return;
+    if (this.stripSticky) {
+      this.strip.style.opacity = '1';
+      this.strip.style.visibility = 'visible';
+      return;
+    }
     const opacity = stripOpacity(performance.now() - this.stripAt, this.stripText);
     this.strip.style.opacity = opacity.toFixed(3);
     this.strip.style.visibility = opacity > 0.02 ? 'visible' : 'hidden';

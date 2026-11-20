@@ -3,9 +3,9 @@ import type { LearnView } from './director';
 import { coachHtml, starText } from './text';
 
 const BANDS: { id: PointOfSail; from: number; to: number; color: string }[] = [
-  { id: 'no-go', from: -35, to: 35, color: '#ff6b6b' },
-  { id: 'close-hauled', from: 35, to: 62, color: '#ffb703' },
-  { id: 'close-hauled', from: -62, to: -35, color: '#ffb703' },
+  { id: 'no-go', from: -45, to: 45, color: '#ff6b6b' },
+  { id: 'close-hauled', from: 45, to: 62, color: '#ffb703' },
+  { id: 'close-hauled', from: -62, to: -45, color: '#ffb703' },
   { id: 'close-reach', from: 62, to: 78, color: '#ffe08a' },
   { id: 'close-reach', from: -78, to: -62, color: '#ffe08a' },
   { id: 'beam-reach', from: 78, to: 112, color: '#7fd8e4' },
@@ -47,7 +47,7 @@ export class LearnOverlay {
     host.innerHTML = `
       <section class="learn-menu" id="learn-menu">
         <h1>Learn to sail</h1>
-        <p class="learn-lede">Six short lessons. Left stick steers the bow. Right trigger sheets in.</p>
+        <p class="learn-lede">Wind first, then stopping. Gybe and capsize are extras. Left stick steers. Right trigger trims in.</p>
         <div id="learn-list"></div>
         <p class="learn-keys"><span class="glyph a">A</span> start <span class="glyph b">B</span> back <span class="glyph dpad">D-pad</span> move</p>
       </section>
@@ -59,7 +59,7 @@ export class LearnOverlay {
           <svg viewBox="-120 -120 240 240" aria-hidden="true"></svg>
           <div class="point-name" id="point-name"></div>
         </div>
-        <p class="learn-keys">Menu: lessons · View: restart this lesson</p>
+        <p class="learn-keys"><span class="glyph menu">Menu</span> pause · <span class="glyph view">View</span> controls</p>
       </section>
       <section class="learn-debrief hidden" id="learn-debrief">
         <div>
@@ -127,6 +127,7 @@ export class LearnOverlay {
         </button>`;
       })
       .join('');
+    this.list.querySelector<HTMLElement>('.focus')?.scrollIntoView({ block: 'nearest' });
   }
 
   private paintCoach(view: LearnView): void {

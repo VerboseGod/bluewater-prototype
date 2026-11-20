@@ -234,10 +234,14 @@ export class HarbourSession {
     };
   }
 
+  isAground(): boolean {
+    return this.grounded;
+  }
+
   hint(): { text: string; urgent: boolean } {
     if (this.reject) return { text: this.reject.text, urgent: true };
     if (this.grounded) {
-      return { text: 'Aground. The board is in the mud. Paddle with Q, or the left side of the pad, back toward deeper water.', urgent: true };
+      return { text: 'Aground. The board is in the mud. Hold D-pad left, or Q, and paddle back toward deeper water.', urgent: true };
     }
     if (this.moored && this.course.phase === 'dock' && this.course.rounded[0] && this.course.rounded[1]) {
       return { text: 'Made fast on the visitor pontoon. Menu opens the chart.', urgent: false };
@@ -245,7 +249,7 @@ export class HarbourSession {
     if (this.moored) return { text: 'Made fast. RB or M lets the line go.', urgent: false };
     if (this.course.phase === 'berth') {
       return {
-        text: 'Herzliya, on a berth. Sheet in and leave under sail, or hold Q to paddle. Z cycles the wind. The afternoon default is the westerly sea breeze.',
+        text: 'Slow speed inside the marina. Sheet in and leave under sail, or hold D-pad left to paddle. LB cycles the wind.',
         urgent: false,
       };
     }
@@ -265,11 +269,15 @@ export class HarbourSession {
     };
   }
 
-  strip(): { text: string; kind: 'info' | 'good' | 'bad' } {
+  strip(): { text: string; kind: 'info' | 'good' | 'bad'; sticky?: boolean } {
     const phase = this.course.phase;
+    const inside = this.world.depth.insideMarina(this.sim.x, this.sim.y);
     const shadow = this.shadowFactor < 0.75 ? ' · wind shadow' : '';
     const ground = this.groundings ? ` · groundings ${this.groundings}` : '';
     const kind = this.grounded ? 'bad' : this.moored ? 'good' : 'info';
+    if (inside && phase !== 'marks') {
+      return { text: `Slow speed inside the marina · ${this.windLabel}${ground}`, kind, sticky: true };
+    }
     return { text: `${this.windLabel} · ${phase}${shadow}${ground}`, kind };
   }
 

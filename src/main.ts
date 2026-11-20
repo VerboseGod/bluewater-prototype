@@ -1,4 +1,7 @@
 import './style.css';
+import { enableGamepadEmulation } from './ui/watch';
+
+enableGamepadEmulation(navigator);
 import type { DockReport } from './dock/score';
 import type { HarbourReport } from './harbour/session';
 import { freshMemory, scriptedPads, type ScriptMemory } from './coop/script';

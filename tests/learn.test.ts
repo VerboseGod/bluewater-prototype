@@ -19,7 +19,7 @@ import {
   type SailSample,
 } from '../src/learn/model';
 import { pilotStick } from '../src/learn/pilot';
-import { loadProgress, recordPass, saveProgress, type Kv } from '../src/learn/progress';
+import { PROGRESS_KEY, loadProgress, recordPass, saveProgress, type Kv } from '../src/learn/progress';
 import { Simulation } from '../src/sim/sim';
 
 function sample(partial: Partial<SailSample> = {}): SailSample {
@@ -66,6 +66,7 @@ describe('points of sail', () => {
     const deg = (d: number) => (d * Math.PI) / 180;
     expect(pointOfSail(deg(10))).toBe('no-go');
     expect(pointOfSail(deg(34))).toBe('no-go');
+    expect(pointOfSail(deg(44))).toBe('no-go');
     expect(pointOfSail(deg(45))).toBe('close-hauled');
     expect(pointOfSail(deg(70))).toBe('close-reach');
     expect(pointOfSail(deg(90))).toBe('beam-reach');
@@ -304,6 +305,19 @@ describe('progress', () => {
     expect(loaded.done).toEqual(['wind']);
     expect(loadProgress(new MemoryStore()).done).toEqual([]);
   });
+
+  it('keeps saved lessons by id when the curriculum grows', () => {
+    const store = new MemoryStore();
+    store.setItem(PROGRESS_KEY, JSON.stringify({ stars: { wind: 3, retired: 2 }, done: ['reach', 'retired', 'wind'] }));
+    const loaded = loadProgress(store);
+    expect(loaded.done).toEqual(['reach', 'wind']);
+    expect(loaded.stars.wind).toBe(3);
+    expect(loaded.stars).not.toHaveProperty('retired');
+    expect(new LearnDirector(store).completed()).toEqual([
+      LESSONS.findIndex((lesson) => lesson.id === 'reach') + 1,
+      LESSONS.findIndex((lesson) => lesson.id === 'wind') + 1,
+    ]);
+  });
 });
 
 describe('menu', () => {
@@ -313,7 +327,7 @@ describe('menu', () => {
     director.move(1);
     expect(director.cursor).toBe(2);
     const launch = director.confirm();
-    expect(launch?.id).toBe('points');
+    expect(launch?.id).toBe('reach');
     expect(director.phase).toBe('sail');
     expect(director.back()).toBe('menu');
     expect(director.back()).toBe('close');
@@ -356,14 +370,19 @@ describe('autopilot against the sim', () => {
     expect(director.stars).toBeGreaterThanOrEqual(1);
   });
 
-  it('finishes lesson 2, a beam reach', () => {
-    const director = sailLesson(1, 30);
+  it('finishes stopping by lying-to', () => {
+    const director = sailLesson(LESSONS.findIndex((lesson) => lesson.id === 'stop'), 25);
+    expect(director.phase, director.stepId).toBe('debrief');
+  });
+
+  it('finishes the beam reach', () => {
+    const director = sailLesson(LESSONS.findIndex((lesson) => lesson.id === 'reach'), 30);
     expect(director.phase).toBe('debrief');
     expect(director.stars).toBeGreaterThanOrEqual(1);
   });
 
-  it('finishes lesson 4 and records the tack score', () => {
-    const director = sailLesson(3, 40);
+  it('finishes the tack and records the tack score', () => {
+    const director = sailLesson(LESSONS.findIndex((lesson) => lesson.id === 'tack'), 45);
     expect(director.phase, director.stepId).toBe('debrief');
     expect(director.memory.tacks.length).toBeGreaterThan(0);
     const tack = director.memory.tacks[0];
@@ -374,7 +393,7 @@ describe('autopilot against the sim', () => {
   });
 
   it('exposes the same tack-quality number the forces use', () => {
-    const launch = launchFor(3);
+    const launch = launchFor(LESSONS.findIndex((lesson) => lesson.id === 'tack'));
     const sim = new Simulation({
       windSpeed: launch.windSpeed,
       windFrom: launch.windFrom,
@@ -392,6 +411,9 @@ describe('autopilot against the sim', () => {
       peak = Math.max(peak, sim.lastTackQuality);
     }
     expect(peak).toBeGreaterThan(0);
-    expect(LESSONS).toHaveLength(6);
+    expect(LESSONS.map((lesson) => lesson.id)).toEqual([
+      'wind', 'stop', 'reach', 'points', 'tack', 'irons', 'return', 'gybe', 'capsize', 'safety', 'mob', 'rules',
+    ]);
+    expect(LESSONS.find((lesson) => lesson.id === 'gybe')?.steps.map((step) => step.say).join(' ')).not.toContain('sheet on');
   });
 });
