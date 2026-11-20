@@ -1,11 +1,18 @@
 import type { CoopKeys, PadAxes } from './coop/route';
+import {
+  freshRepeat,
+  interpretPad,
+  type MenuRepeat,
+  type PadLayout,
+  type Remap,
+  DEFAULT_REMAP,
+} from './input/standard';
 
 export interface InputState {
   rudder: number;
   sheetIn: number;
   sheetOut: number;
   hike: number;
-  /** 0..1 move the sailor in, across the boat, and slightly to leeward. */
   moveIn: number;
   orbitX: number;
   orbitY: number;
@@ -16,7 +23,7 @@ export interface InputState {
   camera: 'chase' | 'cockpit' | 'top' | 'cinema' | null;
   cycleCamera: boolean;
   usingGamepad: boolean;
-  /** H, or LB outside the dock. From the debrief, opens docking practice. */
+  /** H, from the debrief. Opens docking practice. LB no longer does this. */
   dockPressed: boolean;
   /** Right stick click, or F. Drop or weigh the anchor in the dock. */
   anchorPressed: boolean;
@@ -26,20 +33,28 @@ export interface InputState {
   scopeOut: boolean;
   /** D-pad down, held. Take scope in. */
   scopeIn: boolean;
-  /** Left bumper. Cycle harbour wind. */
+  /** Left bumper, dock and harbour. Cycle the wind. */
   windPressed: boolean;
   /** Left stick click. Toggle the light tide. */
   tidePressed: boolean;
-  /** Held. A short paddle, used to leave a berth in the harbour scenario. */
+  /** Held. D-pad left in the dock and harbour, or Q. A short paddle. */
   paddle?: boolean;
-  /** Learn menu. D-pad up, one press. */
+  /** Learn menu and the shell. D-pad up or left stick up, one press. */
   menuUp?: boolean;
-  /** Learn menu. D-pad down, one press. */
+  /** Learn menu and the shell. D-pad down or left stick down, one press. */
   menuDown?: boolean;
   /** Learn menu. A, one press. */
   menuConfirm?: boolean;
   /** Learn menu. B, one press. */
   menuBack?: boolean;
+  /** View button. Opens the controls diagram. One press. */
+  controlsPressed?: boolean;
+  /** A, one press, in every layout. Menus select. Assisted sailing tacks. */
+  confirmPressed?: boolean;
+  /** B, one press, in every layout. Menus go back. The intro skips. */
+  backPressed?: boolean;
+  /** First rising button this frame. The remap screen listens for it. */
+  changedButton?: number | null;
 }
 
 const keys = new Set<string>();
@@ -59,25 +74,27 @@ export function attachKeyboard(target: Window): void {
   target.addEventListener('blur', () => keys.clear());
 }
 
-function buttonValue(pad: Gamepad, index: number): number {
-  const b = pad.buttons[index];
-  return b ? b.value || (b.pressed ? 1 : 0) : 0;
-}
+/** In the dock, D-pad up and down pay the anchor rode. In a menu they move the list. */
+let padLayout: PadLayout = 'sail';
+let invertSteer = false;
+let remap: Remap = { ...DEFAULT_REMAP };
+let prevDown = Array(16).fill(false);
+let menuRepeat: MenuRepeat = freshRepeat();
+let lastPoll = 0;
 
-function edge(prev: boolean, now: boolean): boolean {
-  return now && !prev;
-}
-
-const prevButtons = new Array(16).fill(false);
-
-/** In the dock, D-pad up and down pay the anchor rode. In the learn menu they move the list. */
-let padLayout: 'sail' | 'dock' | 'menu' | 'coop' = 'sail';
-
-export function setPadLayout(layout: 'sail' | 'dock' | 'menu' | 'coop'): void {
+export function setPadLayout(layout: PadLayout): void {
   padLayout = layout;
 }
 
+export function setInputOptions(opts: { invert?: boolean; remap?: Remap }): void {
+  if (opts.invert != null) invertSteer = opts.invert;
+  if (opts.remap) remap = { ...opts.remap };
+}
+
 export function readInput(): InputState {
+  const nowMs = typeof performance === 'undefined' ? 0 : performance.now();
+  const dt = lastPoll ? Math.min(0.1, (nowMs - lastPoll) / 1000) : 1 / 60;
+  lastPoll = nowMs;
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   const pad = pads[0];
   let rudder = 0;
@@ -88,12 +105,10 @@ export function readInput(): InputState {
   let orbitX = 0;
   let orbitY = 0;
   let assistPressed = false;
-  let resetPressed = false;
   let pausePressed = false;
   let qualityPressed = false;
   let camera: InputState['camera'] = null;
   let usingGamepad = false;
-  let dockPressed = false;
   let anchorPressed = false;
   let moorPressed = false;
   let scopeOut = false;
@@ -105,65 +120,75 @@ export function readInput(): InputState {
   let menuDown = false;
   let menuConfirm = false;
   let menuBack = false;
+  let controlsPressed = false;
+  let confirmPressed = false;
+  let backPressed = false;
+  let changedButton: number | null = null;
 
   if (pad && pad.connected) {
     usingGamepad = true;
-    const dz = 0.14;
-    const ax = Math.abs(pad.axes[0]) > dz ? pad.axes[0] : 0;
-    rudder = Math.max(-1, Math.min(1, ax));
-    sheetOut = buttonValue(pad, 6);
-    sheetIn = buttonValue(pad, 7);
-    hike = buttonValue(pad, 0);
-    moveIn = buttonValue(pad, 1);
-    orbitX = Math.abs(pad.axes[2] ?? 0) > dz ? pad.axes[2] : 0;
-    orbitY = Math.abs(pad.axes[3] ?? 0) > dz ? pad.axes[3] : 0;
-    const now = pad.buttons.map((b) => b.pressed);
-    assistPressed = edge(prevButtons[3], now[3] ?? false);
-    resetPressed = edge(prevButtons[8], now[8] ?? false);
-    pausePressed = edge(prevButtons[9], now[9] ?? false);
-    qualityPressed = edge(prevButtons[2], now[2] ?? false);
-    anchorPressed = edge(prevButtons[11], now[11] ?? false);
-    moorPressed = edge(prevButtons[5], now[5] ?? false);
-    tidePressed = edge(prevButtons[10], now[10] ?? false);
-    if (padLayout === 'dock') windPressed = edge(prevButtons[4], now[4] ?? false);
-    else dockPressed = edge(prevButtons[4], now[4] ?? false);
-    const up = now[12] ?? false;
-    const down = now[13] ?? false;
-    const left = now[14] ?? false;
-    const right = now[15] ?? false;
-    if (padLayout === 'menu') {
-      menuUp = edge(prevButtons[12], up);
-      menuDown = edge(prevButtons[13], down);
-      menuConfirm = edge(prevButtons[0], now[0] ?? false);
-      menuBack = edge(prevButtons[1], now[1] ?? false);
-    } else if (padLayout === 'dock') {
-      scopeOut = up;
-      scopeIn = down;
-      if (edge(prevButtons[15], right)) camera = 'cockpit';
-      if (edge(prevButtons[14], left)) camera = 'chase';
-    } else {
-      if (edge(prevButtons[12], up)) camera = 'chase';
-      if (edge(prevButtons[13], down)) camera = 'top';
-      if (edge(prevButtons[15], right)) camera = 'cockpit';
-      if (edge(prevButtons[14], left)) camera = 'chase';
-    }
-    for (let i = 0; i < 16; i++) prevButtons[i] = now[i] ?? false;
+    const actions = interpretPad(
+      {
+        axes: pad.axes,
+        buttons: Array.from({ length: 16 }, (_, i) => {
+          const b = pad.buttons[i];
+          return b ? b.value || (b.pressed ? 1 : 0) : 0;
+        }),
+      },
+      prevDown,
+      { layout: padLayout, invert: invertSteer, remap, repeat: menuRepeat, dt },
+    );
+    prevDown = actions.nextPrev;
+    menuRepeat = actions.nextRepeat;
+    rudder = actions.rudder;
+    sheetIn = actions.sheetIn;
+    sheetOut = actions.sheetOut;
+    hike = actions.hike;
+    moveIn = actions.moveIn;
+    orbitX = actions.orbitX;
+    orbitY = actions.orbitY;
+    assistPressed = actions.assistPressed;
+    pausePressed = actions.pausePressed;
+    qualityPressed = actions.qualityPressed;
+    camera = actions.camera;
+    anchorPressed = actions.anchorPressed;
+    moorPressed = actions.moorPressed;
+    scopeOut = actions.scopeOut;
+    scopeIn = actions.scopeIn;
+    windPressed = actions.windPressed;
+    tidePressed = actions.tidePressed;
+    paddle = actions.paddle;
+    menuUp = actions.menuUp;
+    menuDown = actions.menuDown;
+    menuConfirm = actions.menuConfirm;
+    menuBack = actions.menuBack;
+    controlsPressed = actions.controlsPressed;
+    confirmPressed = actions.confirmPressed;
+    backPressed = actions.backPressed;
+    changedButton = actions.changedButton;
+  } else {
+    prevDown = Array(16).fill(false);
+    menuRepeat = freshRepeat();
   }
 
   const menuKeys = padLayout === 'menu';
   const coopKeys = padLayout === 'coop';
-  if (!menuKeys && !coopKeys && (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a'))) rudder -= 0.5;
-  if (!menuKeys && !coopKeys && (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d'))) rudder += 0.5;
+  if (!menuKeys && !coopKeys && (keys.has('ArrowLeft') || keys.has('KeyA') || keys.has('a'))) rudder -= invertSteer ? -0.5 : 0.5;
+  if (!menuKeys && !coopKeys && (keys.has('ArrowRight') || keys.has('KeyD') || keys.has('d'))) rudder += invertSteer ? -0.5 : 0.5;
   if (!menuKeys && !coopKeys && (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('w'))) sheetIn = Math.max(sheetIn, 1);
   if (!menuKeys && !coopKeys && (keys.has('ArrowDown') || keys.has('KeyS') || keys.has('s'))) sheetOut = Math.max(sheetOut, 1);
   if (menuKeys) {
+    const enter = consumeKey('Enter');
+    const back = consumeKey('Backspace') || consumeKey('Escape') || consumeKey('KeyB') || consumeKey('b');
     menuUp = menuUp || consumeKey('ArrowUp');
     menuDown = menuDown || consumeKey('ArrowDown');
-    menuConfirm = menuConfirm || consumeKey('Enter');
-    menuBack = menuBack || consumeKey('Backspace');
+    menuConfirm = menuConfirm || enter;
+    menuBack = menuBack || back;
+    confirmPressed = confirmPressed || enter;
+    backPressed = backPressed || back;
   }
-  if (!coopKeys && keys.has('Space')) hike = Math.max(hike, 1);
-  if (!coopKeys && (keys.has('KeyB') || keys.has('b'))) moveIn = Math.max(moveIn, 1);
+  if (!coopKeys && !menuKeys && keys.has('Space')) hike = Math.max(hike, 1);
+  if (!coopKeys && !menuKeys && (keys.has('KeyB') || keys.has('b'))) moveIn = Math.max(moveIn, 1);
   if (!coopKeys && keys.has('KeyJ')) orbitX -= 1;
   if (!coopKeys && keys.has('KeyL')) orbitX += 1;
   if (!coopKeys && keys.has('KeyI')) orbitY -= 1;
@@ -171,6 +196,7 @@ export function readInput(): InputState {
   if (keys.has('KeyU') || keys.has('u')) scopeOut = true;
   if (keys.has('KeyN') || keys.has('n')) scopeIn = true;
   if (keys.has('KeyQ') || keys.has('q')) paddle = true;
+  if (!menuKeys && (consumeKey('Backspace') || consumeKey('KeyB') || consumeKey('b'))) backPressed = true;
 
   return {
     rudder: Math.max(-1, Math.min(1, rudder)),
@@ -181,13 +207,13 @@ export function readInput(): InputState {
     orbitX,
     orbitY,
     assistPressed: assistPressed || consumeKey('KeyY') || consumeKey('y'),
-    resetPressed: resetPressed || consumeKey('KeyR'),
-    pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('p') || consumeKey('Escape'),
+    resetPressed: consumeKey('KeyR'),
+    pausePressed: pausePressed || consumeKey('KeyP') || consumeKey('p') || (!menuKeys && consumeKey('Escape')),
     qualityPressed: qualityPressed || consumeKey('KeyG') || consumeKey('KeyX'),
     camera: camera ?? consumeCamera(),
     cycleCamera: consumeKey('KeyC'),
     usingGamepad,
-    dockPressed: dockPressed || consumeKey('KeyH') || consumeKey('h'),
+    dockPressed: consumeKey('KeyH') || consumeKey('h'),
     anchorPressed: anchorPressed || consumeKey('KeyF') || consumeKey('f'),
     moorPressed: moorPressed || consumeKey('KeyM') || consumeKey('m'),
     scopeOut,
@@ -199,6 +225,10 @@ export function readInput(): InputState {
     menuDown,
     menuConfirm,
     menuBack,
+    controlsPressed: controlsPressed || consumeKey('Tab'),
+    confirmPressed,
+    backPressed,
+    changedButton,
   };
 }
 
@@ -229,7 +259,10 @@ export function readPads(): PadAxes[] {
     return {
       connected: true,
       axes: [0, 1, 2, 3].map((axis) => pad.axes[axis] ?? 0),
-      buttons: Array.from({ length: 16 }, (_, button) => buttonValue(pad, button)),
+      buttons: Array.from({ length: 16 }, (_, button) => {
+        const b = pad.buttons[button];
+        return b ? b.value || (b.pressed ? 1 : 0) : 0;
+      }),
     };
   });
 }

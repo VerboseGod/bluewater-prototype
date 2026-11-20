@@ -1,4 +1,4 @@
-import type { LessonId } from './model';
+import { LESSONS, type LessonId } from './model';
 
 export interface Progress {
   stars: Partial<Record<LessonId, number>>;
@@ -32,8 +32,15 @@ export function loadProgress(store?: Kv | null): Progress {
     const raw = kv.getItem(PROGRESS_KEY);
     if (!raw) return emptyProgress();
     const parsed = JSON.parse(raw) as Partial<Progress>;
-    const stars = parsed.stars && typeof parsed.stars === 'object' ? parsed.stars : {};
-    const done = Array.isArray(parsed.done) ? parsed.done.filter((id): id is LessonId => typeof id === 'string') : [];
+    const known = new Set<string>(LESSONS.map((lesson) => lesson.id));
+    const starsIn = parsed.stars && typeof parsed.stars === 'object' ? parsed.stars : {};
+    const stars: Progress['stars'] = {};
+    for (const [id, value] of Object.entries(starsIn)) {
+      if (known.has(id) && typeof value === 'number') stars[id as LessonId] = value;
+    }
+    const done = Array.isArray(parsed.done)
+      ? parsed.done.filter((id): id is LessonId => typeof id === 'string' && known.has(id))
+      : [];
     return { stars, done };
   } catch {
     return emptyProgress();

@@ -150,7 +150,7 @@ function windArrow(): Group {
 }
 
 function noGoLine(): Line {
-  const half = 42.5 * (Math.PI / 180);
+  const half = 45 * (Math.PI / 180);
   const radius = 11;
   const pts: Vector3[] = [];
   for (let i = 0; i <= 24; i++) {

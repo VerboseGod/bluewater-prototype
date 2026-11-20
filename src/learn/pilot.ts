@@ -49,15 +49,18 @@ export function pilotStick(lesson: LessonId, stepId: string, sample: SailSample,
   let hike = 0;
   let moveIn = 0;
 
-  if (lesson === 'wind') {
+  if (lesson === 'wind' || lesson === 'stop') {
     rudder = steerToTwa(sample.twa, 0);
     sheetOut = 1;
+  } else if (lesson === 'irons') {
+    rudder = steerToTwa(sample.twa, sign * 85 * DEG);
+    if (sample.sail === 'luffing' || sample.sheet < 0.35) sheetIn = 0.75;
   } else if (lesson === 'reach') {
     rudder = steerToTwa(sample.twa, sign * 92 * DEG);
     ({ sheetIn, sheetOut } = trim(sample, 'full'));
     ({ hike, moveIn } = balance(sample));
   } else if (lesson === 'points') {
-    const target = stepId === 'run' ? sign * 156 * DEG : stepId === 'reach' ? sign * 92 * DEG : sign * 48 * DEG;
+    const target = stepId === 'run' ? sign * 156 * DEG : stepId === 'reach' ? sign * 92 * DEG : sign * 55 * DEG;
     rudder = steerToTwa(sample.twa, target);
     ({ sheetIn, sheetOut } = trim(sample, stepId === 'run' ? 'ease' : 'full'));
     ({ hike, moveIn } = balance(sample));
@@ -74,19 +77,19 @@ export function pilotStick(lesson: LessonId, stepId: string, sample: SailSample,
           hike = 0;
         } else ({ hike, moveIn } = balance(sample));
       } else {
-        rudder = steerToTwa(sample.twa, -side * 50 * DEG);
+        rudder = steerToTwa(sample.twa, -side * 55 * DEG);
         ({ sheetIn, sheetOut } = trim(sample, 'full'));
         hike = 1;
       }
     } else if (stepId === 'cross' || stepId === 'regain') {
-      rudder = steerToTwa(sample.twa, sign * 50 * DEG);
+      rudder = steerToTwa(sample.twa, sign * 55 * DEG);
       ({ sheetIn, sheetOut } = trim(sample, 'full'));
       if (sample.sail === 'luffing') sheetIn = Math.max(sheetIn, 0.7);
       const seated = balance(sample);
       hike = seated.hike > 0 || stepId === 'cross' ? 1 : 0;
       moveIn = stepId === 'cross' ? 0 : seated.moveIn;
     } else {
-      rudder = steerToTwa(sample.twa, sign * 48 * DEG);
+      rudder = steerToTwa(sample.twa, sign * 55 * DEG);
       ({ sheetIn, sheetOut } = trim(sample, 'full'));
       ({ hike, moveIn } = balance(sample));
     }
