@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { LearnDirector } from '../core/learn/director';
 import {
+  APPROACH_TOO_FAST,
   LESSONS,
+  approachTooFast,
   byTheLee,
   coachHint,
   comingBackGrade,
@@ -292,6 +294,28 @@ describe('lesson 6 coming back', () => {
     expect(comingBackGrade(dock({ distAtStop: 1, impactClass: 'hard' }), head).pass).toBe(false);
     expect(comingBackGrade(null, head).pass).toBe(false);
     expect(gateOpen('made-fast', head, memoryWith({ dock: dock({ moored: true }) }))).toBe(true);
+  });
+
+  it('fails a pontoon contact faster than 1 m/s and sends the boat back to the approach', () => {
+    const learn = new LearnDirector(null);
+    const index = LESSONS.findIndex((lesson) => lesson.id === 'return');
+    const launch = learn.begin(index);
+    learn.tick(1, sample({ x: 3, y: 4 }), null, null);
+    const fast = dock({ contactMs: 1.2, impactClass: 'hard', approachKn: 2.4 });
+    learn.tick(1 / 60, sample({ x: 4, y: 6.4, speed: 1.2, vFwd: 1.1 }), fast, null);
+    expect(approachTooFast(fast)).toBe(true);
+    expect(approachTooFast(dock({ contactMs: 1 }))).toBe(false);
+    expect(learn.view().say).toBe(APPROACH_TOO_FAST);
+    expect(learn.view().say).toBe('too fast, go round and try again');
+    expect(learn.stepId).toBe('fly');
+    expect(learn.consumeReset()).toBe(true);
+    expect(launch).toMatchObject({ x: -1.7, y: 5.55, vx: 1.55 });
+    learn.tick(1 / 60, sample({ x: launch.x, y: launch.y, speed: 0.4 }), dock({ contactMs: 0.4, approachKn: 0.8 }), null);
+    expect(learn.consumeReset()).toBe(false);
+    const other = new LearnDirector(null);
+    other.begin(0);
+    other.tick(1 / 60, sample({ speed: 2 }), dock({ contactMs: 2 }), null);
+    expect(other.consumeReset()).toBe(false);
   });
 });
 

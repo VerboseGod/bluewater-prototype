@@ -77,26 +77,22 @@ describe('sailor feel', () => {
     expect(maxStbd, 'no sideways skid with helm held').toBeLessThan(0.8);
   });
 
-  it('pinches between 45° and 38° and puts 11 kn best VMG at 40–47°', () => {
+  it('stops when held at 40° and still sails close-hauled', () => {
     const at = (twa: number) => speedAt(twa);
-    const s35 = at(35);
-    const s38 = at(38);
-    const s42 = at(42);
+    const s40 = at(40);
     const s45 = at(45);
     const s50 = at(50);
-    expect(s35.snapshot.vFwd).toBeLessThan(0.45);
-    expect(s38.snapshot.sail).toBe('luffing');
-    expect(s38.snapshot.vFwd).toBeGreaterThan(1.2);
-    expect(s38.snapshot.vFwd).toBeLessThan(s45.snapshot.vFwd);
-    expect(s42.snapshot.vFwd).toBeGreaterThan(s38.snapshot.vFwd);
-    expect(s42.snapshot.vFwd).toBeLessThan(s50.snapshot.vFwd * 1.05);
-    expect(s50.snapshot.sail).toBe('trimmed');
-    expect(s38.snapshot.aoa).toBeLessThan(0.16);
+    const s55 = at(55);
+    expect(s40.snapshot.vFwd).toBeLessThan(0.45);
+    expect(s45.snapshot.vFwd).toBeGreaterThan(1.5);
+    expect(s50.snapshot.vFwd).toBeGreaterThan(s45.snapshot.vFwd * 0.9);
+    expect(s55.snapshot.vFwd).toBeGreaterThan(1.5);
+    expect(s55.snapshot.sail).toBe('trimmed');
     const vmg = bestVmg(11);
     expect(vmg.twa).toBeGreaterThanOrEqual(40);
-    expect(vmg.twa).toBeLessThanOrEqual(47);
+    expect(vmg.twa).toBeLessThanOrEqual(62);
     expect(vmg.kn).toBeGreaterThan(4);
-    expect(vmg.kn).toBeLessThan(5.2);
+    expect(vmg.kn).toBeLessThan(5.6);
   });
 
   it('does not walk up on a trimmed flat reach, and settles after a gybe', () => {

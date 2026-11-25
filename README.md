@@ -50,7 +50,7 @@ The sailor's lateral position is a real control, not a pose. A moves them out to
 
 Settled with a decent sheet:
 
-- Inside about 35° the boat stops and the sail is luffing. Between about 38° and 45° it pinches: speed falls off and the windward telltales lift before the stall.
+- The no-go zone is about 45° either side of the true wind, the same band the lessons teach. Held at 40° a boat with way on decelerates to a stop. A tack still carries through, and close-hauled at about 45–50° keeps way. At 55° the boat is sailing.
 - Close-hauled at 45° is about 4.7 kn and at 50° about 4.9 kn. Best VMG stays around 42–45°.
 - A beam reach is about 5.9 kn. The displacement hump is softer on that heading, which is what lets the boat sit near 6 kn.
 - A broad reach, about 120–135°, is about 5.5–6 kn. That band is aft of the beam window, so it gets its own share of the hump relief.

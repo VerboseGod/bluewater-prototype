@@ -201,6 +201,11 @@ button.ghost.on { color: var(--amber); border-color: rgba(255, 193, 77, 0.7); }
 .state-word.stalled { color: var(--bad); }
 .state-word.trimmed { color: var(--good); }
 
+#app.pad-on .legend,
+#app.pad-on .kbd,
+#app.pad-on .gauge-caption,
+#app.pad-on .dial text { display: none; }
+
 .legend {
   display: none;
   position: absolute;
@@ -372,7 +377,7 @@ button.ghost.on { color: var(--amber); border-color: rgba(255, 193, 77, 0.7); }
 .glyph.rt, .glyph.lt, .glyph.ls, .glyph.rb, .glyph.lb, .glyph.dpad { background: #d5dee6; }
 .coach {
   position: absolute;
-  left: 4vw;
+  left: 5vw;
   top: 24vh;
   width: min(820px, 58vw);
   padding: 16px 20px 14px;
@@ -664,7 +669,8 @@ button.ghost.on { color: var(--amber); border-color: rgba(255, 193, 77, 0.7); }
   background: rgba(6, 16, 24, 0.82);
   font-size: 28px;
 }
-.prompt { display: inline-flex; align-items: center; gap: 8px; }
+.prompt { display: inline-flex; align-items: center; gap: 8px; font-size: 28px; }
+.prompt-bar .glyph { font-size: 28px; min-height: 28px; }
 .diagram-list {
   display: grid;
   grid-template-columns: 1fr 1fr;

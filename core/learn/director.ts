@@ -4,6 +4,8 @@ import {
   coachHint,
   debriefLine,
   freshMemory,
+  APPROACH_TOO_FAST,
+  approachTooFast,
   freshStruggle,
   gateOpen,
   launchFor,
@@ -61,6 +63,9 @@ export class LearnDirector {
   private watch = new ManeuverWatch();
   private ribbonAcc = 0;
   private progress: Progress;
+  /** Set when a fast pontoon contact should put the boat back on the approach. */
+  private approachReset = false;
+  private approachNote = 0;
   private readonly store: Kv | null | undefined;
 
   constructor(store?: Kv | null) {
@@ -116,6 +121,8 @@ export class LearnDirector {
     this.hold = 0;
     this.stars = 0;
     this.hint = null;
+    this.approachReset = false;
+    this.approachNote = 0;
     this.struggle = freshStruggle();
     this.watch.reset();
     this.ribbon = [];
@@ -129,6 +136,13 @@ export class LearnDirector {
     return this.begin(this.lessonIndex);
   }
 
+  /** True once, after a fast pontoon contact. The caller puts the boat back at the approach start. */
+  consumeReset(): boolean {
+    const pending = this.approachReset;
+    this.approachReset = false;
+    return pending;
+  }
+
   tick(dt: number, sample: SailSample, dock: DockView | null, added: 'tack' | 'gybe' | null): LearnPhase {
     if (this.phase !== 'sail') return this.phase;
     const lesson = LESSONS[this.lessonIndex];
@@ -139,7 +153,20 @@ export class LearnDirector {
     this.memory.tacks = this.watch.tacks;
     this.memory.gybes = this.watch.gybes;
     this.pushRibbon(sample, dt);
-    this.hint = coachHint(lesson.id, sample, this.struggle);
+    const tooFast = lesson.id === 'return' && approachTooFast(dock);
+    if (tooFast) {
+      this.stepIndex = 0;
+      this.hold = 0;
+      this.memory.stepTime = 0;
+      this.memory.dock = null;
+      this.approachReset = true;
+      this.approachNote = 4;
+    }
+    if (this.approachNote > 0) {
+      this.approachNote = Math.max(0, this.approachNote - dt);
+      this.hint = { id: 'too-fast', level: 1, urgent: true, text: APPROACH_TOO_FAST };
+    } else this.hint = coachHint(lesson.id, sample, this.struggle);
+    if (tooFast) return this.phase;
     const step = lesson.steps[this.stepIndex];
     if (!step) return this.phase;
     if (gateOpen(step.gate, sample, this.memory)) this.hold += dt;

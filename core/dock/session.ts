@@ -1,5 +1,6 @@
 import type { ScenarioInput as InputState } from '../input';
 import { KT } from '../sim/math';
+import { waterSpeed } from '../sim/lowspeed';
 import { Simulation, type BoatState } from '../sim/sim';
 import { AnchorRig } from './anchor';
 import { resolveContact, type ImpactClass } from './contact';
@@ -83,6 +84,8 @@ export class DockSession {
   moored = false;
   mooredOnce = false;
   touching = false;
+  /** Speed through the water, m/s, on a frame the hull is touching. Otherwise 0. */
+  contactMs = 0;
   impactClass: ImpactClass = 'none';
   impactMs = 0;
   private reject: { text: string; until: number } | null = null;
@@ -164,6 +167,7 @@ export class DockSession {
     this.moored = false;
     this.mooredOnce = false;
     this.touching = false;
+    this.contactMs = 0;
     this.impactClass = 'none';
     this.impactMs = 0;
     this.reject = null;
@@ -202,6 +206,9 @@ export class DockSession {
     });
     const contact = resolveContact(this.sim, this.touching, true);
     this.touching = contact.touching;
+    this.contactMs = contact.touching
+      ? waterSpeed(this.sim.vx, this.sim.vy, this.sim.currentX, this.sim.currentY)
+      : 0;
     if (contact.hit === 'hard') {
       this.impactClass = 'hard';
       this.sim.buzz(0.75, 0.45, 200);

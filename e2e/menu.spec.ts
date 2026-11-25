@@ -2,10 +2,51 @@ import { expect, test } from '@playwright/test';
 
 declare global {
   interface Window {
-    __BLUEWATER__?: { getState: () => { scenario?: string; learn?: { phase: string } | null } };
+    __BLUEWATER__?: {
+      getState: () => { scenario?: string; x: number; y: number; learn?: { phase: string } | null };
+    };
     __pad?: { buttons: { pressed: boolean; value: number }[]; axes: number[] };
   }
 }
+
+test('the boat stays still on the main menu', async ({ page }) => {
+  await page.addInitScript(() => {
+    const button = (value = 0) => ({ pressed: value > 0.5, value, touched: value > 0 });
+    const pad = {
+      id: 'Xbox Series Controller (STANDARD GAMEPAD)',
+      index: 0,
+      connected: true,
+      mapping: 'standard',
+      axes: [0.8, 0, 0, 0],
+      buttons: Array.from({ length: 16 }, () => button(0)),
+      timestamp: 0,
+      vibrationActuator: { playEffect: async () => 'complete' as const },
+    };
+    (window as unknown as { __pad: typeof pad }).__pad = pad;
+    Object.defineProperty(navigator, 'getGamepads', {
+      configurable: true,
+      value: () => {
+        pad.timestamp = performance.now();
+        return [pad];
+      },
+    });
+  });
+
+  await page.goto('/bluewater-prototype/');
+  await page.waitForFunction(() => window.__BLUEWATER__?.getState());
+  await expect(page.locator('#main-menu')).toBeVisible();
+  const before = await page.evaluate(() => {
+    const state = window.__BLUEWATER__!.getState();
+    return { x: state.x, y: state.y };
+  });
+  await page.waitForTimeout(3000);
+  await expect(page.locator('#main-menu')).toBeVisible();
+  const after = await page.evaluate(() => {
+    const state = window.__BLUEWATER__!.getState();
+    return { x: state.x, y: state.y };
+  });
+  expect(after).toEqual(before);
+});
 
 test('controller drives the main menu, the pause menu, and a lesson', async ({ page }) => {
   const errors: string[] = [];

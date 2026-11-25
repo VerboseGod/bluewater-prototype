@@ -113,22 +113,22 @@ export class Hud {
                 <button type="button" id="sources-btn">Sources</button>
               </div>
             </div>
-            <div class="badge" id="link">Keyboard</div>
+            <div class="badge kbd" id="link">Keyboard</div>
             <div class="muted" id="fps">-- fps</div>
           </div>
         </div>
         <div class="mid"><div class="stack"><div class="dockstrip hidden" id="dockstrip"></div><div class="hint" id="hint"></div></div></div>
         <div class="bottom">
           <div class="panel sheet">
-            <div>Sheeted in <span class="muted">right trigger in · left trigger out</span></div>
+            <div class="gauge-caption">Sheeted in <span class="muted">right trigger in · left trigger out</span></div>
             <div class="bar"><i id="sheetfill"></i><em class="mark" id="sheetmark"></em></div>
             <div class="state-word" id="sheetword">Luffing</div>
           </div>
           <div class="panel heel">
-            <div>Heel</div>
+            <div class="gauge-caption">Heel</div>
             <div class="bar"><i id="heelfill"></i></div>
             <div class="state-word" id="heelword">Flat</div>
-            <div>Sailor <span class="muted">A out · B in</span></div>
+            <div class="gauge-caption">Sailor <span class="muted">A out · B in</span></div>
             <div class="bar"><i id="sailorfill"></i></div>
             <div class="state-word" id="sailorword">Windward rail</div>
           </div>
@@ -219,6 +219,12 @@ export class Hud {
 
   setLink(text: string): void {
     this.link.textContent = text;
+    this.link.classList.toggle('kbd', text === 'Keyboard');
+  }
+
+  /** A connected pad is driving. Hide the desktop key chips and the old gauge captions. */
+  setPadActive(active: boolean): void {
+    this.root.classList.toggle('pad-on', active);
   }
 
   setTime(mode: 'day' | 'golden' | 'dusk'): void {
@@ -241,7 +247,7 @@ export class Hud {
     this.scenarioMenu.textContent = leave;
     this.placesBtn.textContent =
       mode === 'coop' ? 'Co-op' : mode === 'learn' ? 'Learn' : mode === 'harbour' ? 'Herzliya' : mode === 'dock' ? 'Docking' : 'Places';
-    if (mode !== 'open') this.link.textContent = 'Keyboard';
+    if (mode !== 'open') this.setLink('Keyboard');
     this.legend.textContent =
       mode === 'dock'
         ? 'A out · B in · Y assisted · F anchor · M line · Z wind · View reset · Menu debrief · X graphics'
@@ -299,7 +305,7 @@ export class Hud {
     this.modeBtn.textContent = sim.assisted ? 'Assisted' : 'Full manual';
     this.modeBtn.classList.toggle('on', sim.assisted);
     this.qualityBtn.textContent = quality === 'high' ? 'High' : 'Low';
-    if (this.scenario === 'open') this.link.textContent = s.gust > 1.12 ? 'Gust' : 'Steady';
+    if (this.scenario === 'open') this.setLink(s.gust > 1.12 ? 'Gust' : 'Steady');
     const sheetPct = s.sheet * 100;
       this.sheetFill.style.width = `${sheetPct}%`;
     this.sheetMark.style.left = sim.assisted ? `${s.suggestedSheet * 100}%` : '-10px';

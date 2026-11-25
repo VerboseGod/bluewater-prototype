@@ -6,8 +6,8 @@ import { DEG, KT, wrapPi } from '../core/sim/math';
 import { makeSim, settle, courseHeading } from './support';
 
 describe('dinghy behaviour', () => {
-  it('cannot sustain speed inside about 35 degrees of the true wind', () => {
-    for (const twa of [0, 15, 25, 35]) {
+  it('cannot sustain speed inside the 45° no-go zone', () => {
+    for (const twa of [0, 15, 25, 35, 40]) {
       const sim = makeSim();
       const heading = courseHeading(sim.wind.baseFrom, twa);
       sim.heading = heading;
@@ -159,7 +159,7 @@ describe('speed curve', () => {
       });
     }
     for (const row of rows) {
-      if (row.twa <= 35) expect(row.vFwd, `no-go ${row.twa}`).toBeLessThan(0.4);
+      if (row.twa <= 40) expect(row.vFwd, `no-go ${row.twa}`).toBeLessThan(0.4);
     }
     let peak = rows[0];
     for (const row of rows) if (row.vFwd > peak.vFwd) peak = row;

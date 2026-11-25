@@ -158,6 +158,17 @@ export interface DockView {
   impactClass: 'none' | 'gentle' | 'hard';
   distAtStop: number | null;
   stopped: boolean;
+  /** Boat speed, m/s, while the hull is touching. Zero when it is clear. */
+  contactMs?: number;
+}
+
+/** A pontoon approach faster than this, at contact, has to go round. */
+export const APPROACH_TOO_FAST_MS = 1;
+
+export const APPROACH_TOO_FAST = 'too fast, go round and try again';
+
+export function approachTooFast(dock: DockView | null): boolean {
+  return (dock?.contactMs ?? 0) > APPROACH_TOO_FAST_MS;
 }
 
 export interface LessonMemory {

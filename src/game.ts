@@ -399,6 +399,12 @@ export class Game {
   private applyInput(input: InputState, dt: number): void {
     const wasPlay = this.shell.screen === 'play';
     const gate = this.shell.pump(input);
+    if (this.shell.screen === 'main') {
+      this.paused = true;
+      this.latched = false;
+      this.acc = 0;
+      return;
+    }
     if (gate === 'modal') {
       this.paused = true;
       this.hud.setPaused(true);
@@ -857,6 +863,7 @@ export class Game {
     if (stepped <= 0) return;
     const added = this.sim.marks.length > marksBefore ? this.sim.marks[this.sim.marks.length - 1].type : null;
     const phase = learn.tick(stepped, sampleOf(this.sim.snapshot, this.sim.lastTackQuality), this.dockGrade(), added);
+    if (learn.consumeReset()) this.dock?.reset();
     if (phase === 'debrief') this.onLearnDebrief();
   }
 
@@ -891,6 +898,7 @@ export class Game {
       impactClass: report.impactClass,
       distAtStop: report.distAtStop,
       stopped: report.distAtStop != null,
+      contactMs: this.dock.contactMs,
     };
   }
 
@@ -1115,6 +1123,7 @@ export class Game {
       this.watch = watchGamepad(this.watch, { connected: true, timestamp: pad.timestamp, active }, dt);
     }
     this.shell.setGamepadHint(this.watch.show);
+    this.hud.setPadActive(!!pad && pad.connected);
   }
 
   private feel(strong: number, weak: number, ms: number): void {

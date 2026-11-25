@@ -59,6 +59,12 @@ test('beam reach then a tack, with no console errors', async ({ page }) => {
     );
   };
 
+  await expect(page.locator('#main-menu')).toBeVisible();
+  await setButton(0, 1);
+  await page.waitForTimeout(200);
+  await setButton(0, 0);
+  await expect(page.locator('#main-menu')).toBeHidden();
+
   await setButton(7, 1);
   await page.waitForTimeout(340);
   await setButton(7, 0);
