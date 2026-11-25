@@ -283,6 +283,24 @@ describe('mooring line', () => {
   });
 });
 
+describe('pontoon contact', () => {
+  it('reports boat speed while the hull is touching the pontoon', () => {
+    const session = new DockSession({ demo: false, assisted: false });
+    session.sim.x = 4;
+    session.sim.y = 6.55;
+    session.sim.heading = 0;
+    session.sim.vx = 1.4;
+    session.sim.vy = 0;
+    session.step(DT, idle());
+    expect(session.touching, 'hull should meet the pontoon').toBe(true);
+    expect(session.contactMs).toBeGreaterThan(1);
+    session.sim.vx = 0.4;
+    session.sim.vy = 0;
+    session.step(DT, idle());
+    expect(session.contactMs).toBeLessThanOrEqual(1);
+  });
+});
+
 describe('impact', () => {
   it('classifies a gentle bump against a hard hit', () => {
     expect(classifyImpact(0.05, true)).toBe('none');

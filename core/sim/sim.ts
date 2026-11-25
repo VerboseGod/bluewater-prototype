@@ -347,22 +347,34 @@ export class Simulation {
     const flowAwa = flowAws > 0.05 ? wrapPi(Math.atan2(-flow.y, -flow.x) - this.heading) : awa;
 
     const twaAbsEarly = Math.abs(twa);
-    // Between about 46° and 37° true, sheet the sail toward a luff so speed
-    // bleeds off before the stall, instead of staying full until a cliff.
-    const pinch = smoothstep(50 * (Math.PI / 180), 37 * (Math.PI / 180), twaAbsEarly);
+    // Pinch from about 50° down toward the no-go. The lessons call that zone
+    // about 45° either side of the true wind.
+    const pinch = smoothstep(50 * DEG, 37 * DEG, twaAbsEarly);
     const sailAwa = flowAwa;
     this.updateBoom(dt, sailAwa, flowAws, twa);
     const stall = this.assisted ? STALL_AOA_ASSIST : STALL_AOA;
     const sail = sailForces(sailAwa, this.boom, flowAws, this.heel, stall);
-    if (pinch > 0) {
-      // Angle of attack, not the slip-swollen apparent wind, drives the luff.
-      sail.aoa *= 1 - 0.62 * pinch;
-      sail.drive *= 1 - 0.28 * pinch;
-      sail.side *= 1 - 0.15 * pinch;
-      if (twaAbsEarly < 36 * (Math.PI / 180)) {
+    if (pinch > 0 || twaAbsEarly < 45 * DEG) {
+      if (pinch > 0) {
+        // Angle of attack, not the slip-swollen apparent wind, drives the luff.
+        sail.aoa *= 1 - 0.62 * pinch;
+        sail.drive *= 1 - 0.28 * pinch;
+        sail.side *= 1 - 0.15 * pinch;
+      }
+      // Soft edge. A boat held near 40° true loses its drive and stops.
+      // Close-hauled, about 45–50°, is left with way. A tack is still
+      // swinging, so it carries momentum instead of stalling in the band.
+      const swinging = Math.abs(this.yawRate) > 0.02;
+      if (twaAbsEarly < 36 * DEG) {
         sail.drive *= 0.08;
         sail.side *= 0.35;
         sail.aoa = Math.min(sail.aoa, 0.07);
+      } else if (!swinging && twaAbsEarly < 45 * DEG) {
+        const span = smoothstep(45 * DEG, 40 * DEG, twaAbsEarly);
+        const depth = span * span * span;
+        sail.drive *= 1 - 0.92 * depth;
+        sail.side *= 1 - 0.65 * depth;
+        if (depth > 0.85) sail.aoa = Math.min(sail.aoa, 0.07);
       }
       if (sail.aoa < 0.16) sail.mode = 'luffing';
       else if (sail.aoa < stall && sail.mode === 'luffing') sail.mode = 'trimmed';

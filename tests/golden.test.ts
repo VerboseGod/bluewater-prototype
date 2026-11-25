@@ -6,6 +6,7 @@ import { FIXED_DT, createDock, step, stepDock } from '../core/step';
 import { DockSession, type DockState } from '../core/dock/session';
 import { DEG, KT } from '../core/sim/math';
 import { Simulation, type BoatState, type SimOptions } from '../core/sim/sim';
+import { courseHeading, makeSim, settle } from './support';
 
 const FIXTURES = join(import.meta.dirname, '..', 'core', 'fixtures');
 const WRITE = process.env.GOLDEN_WRITE === '1';
@@ -171,6 +172,27 @@ function loadOrRecord(name: string, built: Omit<Fixture, 'samples'> & { samples:
     : playBoat(saved.initial as BoatState, saved.script, saved.every);
   expect(replay).toEqual(saved.samples);
 }
+
+describe('no-go zone', () => {
+  it('decelerates to a stop at 40° true wind and makes way at 55°', () => {
+    const run = (twa: number) => {
+      const sim = makeSim();
+      const heading = courseHeading(sim.wind.baseFrom, twa);
+      sim.heading = heading;
+      const speed = 2.2;
+      sim.vx = Math.cos(heading) * speed;
+      sim.vy = Math.sin(heading) * speed;
+      sim.syncPose();
+      settle(sim, 20, heading);
+      return sim.snapshot.vFwd;
+    };
+    const inside = run(40);
+    const outside = run(55);
+    expect(inside, '40° true wind, held, is inside the no-go').toBeLessThan(0.45);
+    expect(inside, 'the boat gives up the way it started with').toBeLessThan(1);
+    expect(outside, '55° true wind is close-hauled and sailing').toBeGreaterThan(1.5);
+  });
+});
 
 describe('plain step matches the class', () => {
   it('replays an open-water boat without dropping state', () => {

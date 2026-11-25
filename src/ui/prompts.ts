@@ -53,8 +53,8 @@ export function promptsFor(ctx: PromptContext): Prompt[] {
     { glyph: 'menu', label: 'Pause' },
   ];
   const prompts: Prompt[] = [];
-  if (ctx.tacking) prompts.push({ glyph: 'ls', label: 'Through the wind' }, { glyph: 'a', label: 'Tacking' });
-  else if (ctx.afterTack) prompts.push({ glyph: 'ls', label: 'Straighten up' });
+  if (ctx.tacking) prompts.push({ glyph: 'ls', label: 'Tack: turn the bow through the wind' }, { glyph: 'a', label: 'Keep the bow turning' });
+  else if (ctx.afterTack) prompts.push({ glyph: 'ls', label: 'Straighten the tiller' });
   else prompts.push({ glyph: 'ls', label: 'Steer' });
   if (!ctx.assisted) {
     prompts.push({ glyph: 'rt', label: 'Trim in' });
@@ -66,10 +66,10 @@ export function promptsFor(ctx: PromptContext): Prompt[] {
   if (ctx.mode === 'dock' || ctx.mode === 'harbour') {
     prompts.push({ glyph: 'rb', label: 'Mooring line' });
     prompts.push({ glyph: 'rs', label: 'Anchor' });
-    prompts.push({ glyph: 'lb', label: 'Wind' });
+    prompts.push({ glyph: 'lb', label: 'Change the wind' });
   }
   if (ctx.mode === 'harbour') prompts.push({ glyph: 'dpad', label: 'Paddle' });
-  if (ctx.mode === 'dock') prompts.push({ glyph: 'dpad', label: 'Scope' });
+  if (ctx.mode === 'dock') prompts.push({ glyph: 'dpad', label: 'Anchor scope' });
   prompts.push({ glyph: 'view', label: 'Controls' });
   prompts.push({ glyph: 'menu', label: 'Pause' });
   return dedupe(prompts);

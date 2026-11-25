@@ -59,8 +59,11 @@ describe('prompts', () => {
     expect(sailing).toContain('a:Tack');
     expect(sailing).not.toContain('rt:Trim in');
     const after = promptsFor({ ...play, afterTack: true }).map((prompt) => prompt.label);
-    expect(after).toContain('Straighten up');
+    expect(after).toContain('Straighten the tiller');
     expect(after).not.toContain('Tack');
+    const tacking = promptsFor({ ...play, tacking: true }).map((prompt) => prompt.label);
+    expect(tacking).toContain('Tack: turn the bow through the wind');
+    expect(tacking).not.toContain('Through the wind');
     const manual = promptsFor({ ...play, assisted: false }).map((prompt) => prompt.label);
     expect(manual).toContain('Trim in');
     expect(manual).toContain('Ease sheet');
